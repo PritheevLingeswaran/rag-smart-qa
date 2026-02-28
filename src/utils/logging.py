@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import logging.config
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 import yaml
@@ -12,7 +12,7 @@ import yaml
 def configure_logging(config_path: str = "configs/logging.yaml", level: str = "INFO") -> None:
     p = Path(config_path)
     if p.exists():
-        cfg: Dict[str, Any] = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        cfg: dict[str, Any] = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         logging.config.dictConfig(cfg)
     else:
         logging.basicConfig(level=getattr(logging, level, logging.INFO), format="%(message)s")

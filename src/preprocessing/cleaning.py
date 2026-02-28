@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from utils.text import normalize_whitespace, strip_null_bytes
 from utils.settings import CleaningConfig
+from utils.text import normalize_whitespace, strip_null_bytes
 
 
 def clean_text(text: str, cfg: CleaningConfig) -> str:

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List
 
 from embeddings.factory import build_embeddings_backend
 from retrieval.bm25 import BM25PersistentIndex
 from retrieval.corpus import load_chunks_jsonl
-from retrieval.vector_store import IndexedChunk, VectorStore, build_vector_store
+from retrieval.vector_store import VectorStore, build_vector_store
 from utils.config import ensure_dirs, load_settings
 from utils.logging import configure_logging, get_logger
 
@@ -28,7 +27,7 @@ def build_index_main() -> None:
     # Build BM25 over the *full* corpus (required for hybrid retrieval).
     # This is a local, reproducible baseline. Large deployments should swap this for Lucene/ES.
     bm25_dir = Path(settings.paths.indexes_dir) / "bm25"
-    texts_by_id: Dict[str, str] = {c.chunk_id: c.text for c in chunks}
+    texts_by_id: dict[str, str] = {c.chunk_id: c.text for c in chunks}
     BM25PersistentIndex.build(texts_by_id).save(str(bm25_dir))
     log.info("index.bm25_saved", dir=str(bm25_dir), num_docs=len(texts_by_id))
 
@@ -46,10 +45,17 @@ def build_index_main() -> None:
         store.add(b, emb.vectors)
         total_tokens += emb.total_tokens
         total_cost += emb.cost_usd
-        log.info("index.batch", start=i, size=len(b), tokens=emb.total_tokens, cost_usd=emb.cost_usd)
+        log.info(
+            "index.batch", start=i, size=len(b), tokens=emb.total_tokens, cost_usd=emb.cost_usd
+        )
 
     store.save()
-    log.info("index.saved", provider=settings.vector_store.provider, total_tokens=total_tokens, total_cost_usd=total_cost)
+    log.info(
+        "index.saved",
+        provider=settings.vector_store.provider,
+        total_tokens=total_tokens,
+        total_cost_usd=total_cost,
+    )
 
 
 if __name__ == "__main__":

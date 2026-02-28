@@ -4,7 +4,12 @@ from functools import lru_cache
 
 from generation.answerer import Answerer
 from retrieval.retriever import Retriever
-from retrieval.vector_store import ChromaVectorStore, FaissVectorStore, VectorStore, build_vector_store
+from retrieval.vector_store import (
+    ChromaVectorStore,
+    FaissVectorStore,
+    VectorStore,
+    build_vector_store,
+)
 from utils.config import ensure_dirs, load_settings
 from utils.logging import configure_logging
 from utils.settings import Settings

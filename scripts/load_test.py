@@ -6,7 +6,7 @@ import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import httpx
 
@@ -14,11 +14,11 @@ from evaluation.performance import summarize_latency
 from utils.config import load_settings
 
 
-def _load_questions(dataset_path: str) -> List[str]:
+def _load_questions(dataset_path: str) -> list[str]:
     p = Path(dataset_path)
     if not p.exists():
         return []
-    qs: List[str] = []
+    qs: list[str] = []
     for line in p.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -37,13 +37,13 @@ class LoadResult:
     ok: bool
     latency_s: float
     status_code: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
 async def _one_request(
     client: httpx.AsyncClient,
     url: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     timeout_s: float,
 ) -> LoadResult:
     t0 = time.perf_counter()
@@ -51,7 +51,9 @@ async def _one_request(
         r = await client.post(url, json=payload, timeout=timeout_s)
         lat = time.perf_counter() - t0
         ok = 200 <= r.status_code < 300
-        return LoadResult(ok=ok, latency_s=lat, status_code=r.status_code, error=None if ok else r.text[:200])
+        return LoadResult(
+            ok=ok, latency_s=lat, status_code=r.status_code, error=None if ok else r.text[:200]
+        )
     except Exception as e:
         lat = time.perf_counter() - t0
         return LoadResult(ok=False, latency_s=lat, status_code=0, error=str(e))
@@ -78,7 +80,7 @@ async def load_test_async() -> None:
     limits = httpx.Limits(max_keepalive_connections=conc, max_connections=conc)
     async with httpx.AsyncClient(limits=limits) as client:
         sem = asyncio.Semaphore(conc)
-        results: List[LoadResult] = []
+        results: list[LoadResult] = []
 
         async def runner(i: int) -> None:
             q = random.choice(questions)

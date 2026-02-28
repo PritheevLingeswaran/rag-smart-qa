@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -22,17 +22,19 @@ class OpenAIClient:
 
     def __init__(
         self,
-        api_key: Optional[str],
-        base_url: Optional[str] = None,
-        organization: Optional[str] = None,
+        api_key: str | None,
+        base_url: str | None = None,
+        organization: str | None = None,
         timeout_s: float = 30.0,
         max_retries: int = 3,
     ) -> None:
-        self._client = OpenAI(api_key=api_key, base_url=base_url, organization=organization, timeout=timeout_s)
+        self._client = OpenAI(
+            api_key=api_key, base_url=base_url, organization=organization, timeout=timeout_s
+        )
         self._max_retries = max_retries
 
     @retry(wait=wait_exponential(min=0.5, max=8), stop=stop_after_attempt(3), reraise=True)
-    def embed(self, model: str, inputs: List[str]) -> Tuple[List[List[float]], Usage]:
+    def embed(self, model: str, inputs: list[str]) -> tuple[list[list[float]], Usage]:
         resp = self._client.embeddings.create(model=model, input=inputs)
         vectors = [d.embedding for d in resp.data]
         usage = Usage(total_tokens=getattr(resp.usage, "total_tokens", 0))
@@ -42,11 +44,11 @@ class OpenAIClient:
     def chat(
         self,
         model: str,
-        messages: List[dict],
+        messages: list[dict],
         temperature: float,
         max_output_tokens: int,
-        response_format: Optional[dict] = None,
-    ) -> Tuple[str, Usage]:
+        response_format: dict | None = None,
+    ) -> tuple[str, Usage]:
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,

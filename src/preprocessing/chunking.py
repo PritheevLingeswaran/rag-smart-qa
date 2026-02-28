@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 import tiktoken
 
@@ -26,7 +25,7 @@ class TokenChunker:
         except Exception:
             self.enc = None
 
-    def split(self, text: str) -> List[TextChunk]:
+    def split(self, text: str) -> list[TextChunk]:
         if not text:
             return []
         if self.enc is not None:
@@ -37,7 +36,7 @@ class TokenChunker:
             decode = lambda toks: " ".join(toks)
         size = self.cfg.chunk_size
         overlap = self.cfg.chunk_overlap
-        out: List[TextChunk] = []
+        out: list[TextChunk] = []
         start = 0
         idx = 0
         while start < len(tokens):
@@ -56,10 +55,10 @@ class CharChunker:
     def __init__(self, cfg: ChunkingConfig) -> None:
         self.cfg = cfg
 
-    def split(self, text: str) -> List[TextChunk]:
+    def split(self, text: str) -> list[TextChunk]:
         size = self.cfg.max_chars_fallback
         overlap = min(self.cfg.chunk_overlap, size // 2)
-        out: List[TextChunk] = []
+        out: list[TextChunk] = []
         start = 0
         idx = 0
         while start < len(text):
@@ -74,7 +73,7 @@ class CharChunker:
         return out
 
 
-def chunk_text(text: str, cfg: ChunkingConfig) -> List[TextChunk]:
+def chunk_text(text: str, cfg: ChunkingConfig) -> list[TextChunk]:
     if cfg.strategy == "token":
         return TokenChunker(cfg).split(text)
     return CharChunker(cfg).split(text)

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, List
 
 from pypdf import PdfReader
 
@@ -14,21 +14,21 @@ class Page:
     text: str
 
 
-def load_pdf(path: Path) -> List[Page]:
+def load_pdf(path: Path) -> list[Page]:
     reader = PdfReader(str(path))
-    pages: List[Page] = []
+    pages: list[Page] = []
     for i, p in enumerate(reader.pages):
         txt = p.extract_text() or ""
         pages.append(Page(source=str(path), page=i + 1, text=txt))
     return pages
 
 
-def load_txt(path: Path) -> List[Page]:
+def load_txt(path: Path) -> list[Page]:
     txt = path.read_text(encoding="utf-8", errors="ignore")
     return [Page(source=str(path), page=1, text=txt)]
 
 
-def iter_documents(raw_dir: str, exts: List[str]) -> Iterator[Path]:
+def iter_documents(raw_dir: str, exts: list[str]) -> Iterator[Path]:
     root = Path(raw_dir)
     if not root.exists():
         return

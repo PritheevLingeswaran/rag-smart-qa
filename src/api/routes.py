@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-import time
 
 from api.deps import get_answerer, get_retriever
-from monitoring.metrics import REQUEST_COST_USD, REQUEST_TOKENS, REQUEST_LATENCY
+from monitoring.metrics import REQUEST_COST_USD, REQUEST_LATENCY, REQUEST_TOKENS
 from schemas.query import HealthResponse, QueryRequest
 from schemas.response import QueryResponse
 from utils.logging import get_logger

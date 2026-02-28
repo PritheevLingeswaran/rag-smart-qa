@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
 
 from rank_bm25 import BM25Okapi
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     return [t for t in "".join([c.lower() if c.isalnum() else " " for c in text]).split() if t]
 
 
@@ -19,12 +19,12 @@ class BM25Hit:
 
 
 class BM25Index:
-    def __init__(self, texts: List[str]) -> None:
+    def __init__(self, texts: list[str]) -> None:
         self.texts = texts
         self.tokens = [_tokenize(t) for t in texts]
         self.bm25 = BM25Okapi(self.tokens)
 
-    def query(self, q: str, top_k: int) -> List[BM25Hit]:
+    def query(self, q: str, top_k: int) -> list[BM25Hit]:
         scores = self.bm25.get_scores(_tokenize(q))
         ranked = sorted(enumerate(scores), key=lambda x: float(x[1]), reverse=True)[:top_k]
         return [BM25Hit(idx=i, score=float(s)) for i, s in ranked]
@@ -56,7 +56,7 @@ class BM25PersistentIndex:
 
     INDEX_VERSION = 1
 
-    def __init__(self, *, chunk_ids: List[str], tokenized_docs: List[List[str]]) -> None:
+    def __init__(self, *, chunk_ids: list[str], tokenized_docs: list[list[str]]) -> None:
         if len(chunk_ids) != len(tokenized_docs):
             raise ValueError("chunk_ids and tokenized_docs must have the same length")
         self.chunk_ids = chunk_ids
@@ -64,7 +64,7 @@ class BM25PersistentIndex:
         self._bm25 = BM25Okapi(self.tokenized_docs)
 
     @classmethod
-    def build(cls, texts_by_chunk_id: Dict[str, str]) -> "BM25PersistentIndex":
+    def build(cls, texts_by_chunk_id: dict[str, str]) -> BM25PersistentIndex:
         # Preserve deterministic order by sorting keys. This makes evaluation reproducible.
         chunk_ids = sorted(texts_by_chunk_id.keys())
         tokenized = [_tokenize(texts_by_chunk_id[cid]) for cid in chunk_ids]
@@ -85,7 +85,7 @@ class BM25PersistentIndex:
             pickle.dump({"chunk_ids": self.chunk_ids, "tokenized_docs": self.tokenized_docs}, f)
 
     @classmethod
-    def load(cls, index_dir: str) -> "BM25PersistentIndex":
+    def load(cls, index_dir: str) -> BM25PersistentIndex:
         import json
         import pickle
 
@@ -107,8 +107,8 @@ class BM25PersistentIndex:
         self,
         q: str,
         top_k: int,
-        filter_fn: Optional[Callable[[str], bool]] = None,
-    ) -> List[BM25DocHit]:
+        filter_fn: Callable[[str], bool] | None = None,
+    ) -> list[BM25DocHit]:
         """Return top_k matches with optional filtering.
 
         filter_fn takes chunk_id and returns True if that chunk is eligible.
@@ -118,7 +118,7 @@ class BM25PersistentIndex:
         q_tokens = _tokenize(q)
         scores = self._bm25.get_scores(q_tokens)
         ranked = sorted(enumerate(scores), key=lambda x: float(x[1]), reverse=True)
-        hits: List[BM25DocHit] = []
+        hits: list[BM25DocHit] = []
         for idx, s in ranked:
             cid = self.chunk_ids[idx]
             if filter_fn is not None and not filter_fn(cid):

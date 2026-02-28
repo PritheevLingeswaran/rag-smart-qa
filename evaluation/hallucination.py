@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import re
-from typing import List
 
 from utils.openai_client import OpenAIClient
 
 
-def heuristic_grounded(answer: str, sources: List[str]) -> bool:
+def heuristic_grounded(answer: str, sources: list[str]) -> bool:
     answer_clean = re.sub(r"\[[^\]]+\]", "", answer)
     sentences = [s.strip() for s in re.split(r"[\n\.!?]+", answer_clean) if s.strip()]
     if not sentences:
@@ -28,7 +27,7 @@ def llm_judge_grounded(
     model: str,
     question: str,
     answer: str,
-    sources: List[str],
+    sources: list[str],
 ) -> bool:
     context = "\n\n".join(sources)[:12000]
     prompt = (
@@ -40,7 +39,10 @@ def llm_judge_grounded(
     )
     text, _ = client.chat(
         model=model,
-        messages=[{"role": "system", "content": "You are a strict fact-checker."}, {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "You are a strict fact-checker."},
+            {"role": "user", "content": prompt},
+        ],
         temperature=0.0,
         max_output_tokens=5,
     )

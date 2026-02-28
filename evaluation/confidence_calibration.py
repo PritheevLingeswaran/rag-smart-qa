@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
 
 
 @dataclass
@@ -13,16 +12,18 @@ class CalibrationBin:
     accuracy: float
 
 
-def expected_calibration_error(confs: List[float], correct: List[int], n_bins: int = 10) -> Tuple[float, List[CalibrationBin]]:
+def expected_calibration_error(
+    confs: list[float], correct: list[int], n_bins: int = 10
+) -> tuple[float, list[CalibrationBin]]:
     assert len(confs) == len(correct)
-    buckets: List[List[int]] = [[] for _ in range(n_bins)]
+    buckets: list[list[int]] = [[] for _ in range(n_bins)]
     for i, c in enumerate(confs):
         b = min(n_bins - 1, int(c * n_bins))
         buckets[b].append(i)
 
     total = len(confs) or 1
     ece = 0.0
-    out: List[CalibrationBin] = []
+    out: list[CalibrationBin] = []
     for b, idxs in enumerate(buckets):
         if not idxs:
             continue

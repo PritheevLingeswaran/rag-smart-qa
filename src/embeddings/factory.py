@@ -11,7 +11,9 @@ def build_embeddings_backend(settings: Settings) -> EmbeddingsBackend:
     if settings.embeddings.provider == "sentence_transformers":
         # Optional dependency: do not import unless configured.
         try:
-            from embeddings.sentence_transformers_embeddings import SentenceTransformersEmbeddingsBackend
+            from embeddings.sentence_transformers_embeddings import (
+                SentenceTransformersEmbeddingsBackend,
+            )
         except ModuleNotFoundError as e:
             raise ModuleNotFoundError(
                 "sentence-transformers is not installed. Install it or switch embeddings.provider to 'openai'."

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import List
-
-from embeddings.base import EmbedResult, EmbeddingsBackend
+from embeddings.base import EmbeddingsBackend, EmbedResult
 from utils.openai_client import OpenAIClient
 from utils.settings import EmbeddingsConfig
 
@@ -23,9 +21,13 @@ class OpenAIEmbeddingsBackend(EmbeddingsBackend):
     def _cost(self, tokens: int) -> float:
         return (tokens / 1000.0) * self.usd_per_1k
 
-    def embed_texts(self, texts: List[str]) -> EmbedResult:
+    def embed_texts(self, texts: list[str]) -> EmbedResult:
         vectors, usage = self.client.embed(self.model, texts)
-        return EmbedResult(vectors=vectors, total_tokens=usage.total_tokens, cost_usd=self._cost(usage.total_tokens))
+        return EmbedResult(
+            vectors=vectors,
+            total_tokens=usage.total_tokens,
+            cost_usd=self._cost(usage.total_tokens),
+        )
 
     def embed_query(self, text: str) -> EmbedResult:
         return self.embed_texts([text])

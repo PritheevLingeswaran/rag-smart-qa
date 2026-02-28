@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
 
 
 class SourceChunk(BaseModel):
@@ -20,6 +21,6 @@ class Refusal(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     confidence: float = Field(ge=0.0, le=1.0)
-    sources: List[SourceChunk]
+    sources: list[SourceChunk]
     refusal: Refusal
-    metrics: Dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)

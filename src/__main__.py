@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 
 from ingestion.ingest import ingest_documents, write_chunks
-from utils.config import ensure_dirs, load_settings
-from utils.logging import configure_logging
 from scripts.build_index import build_index_main
 from scripts.run_api import run_api_main
 from scripts.run_eval import run_eval_main
+from utils.config import ensure_dirs, load_settings
+from utils.logging import configure_logging
 
 
 def main() -> None:

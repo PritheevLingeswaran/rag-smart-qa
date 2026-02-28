@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 """Optional reranking.
 
@@ -26,7 +25,7 @@ class CrossEncoderReranker:
             ) from e
         self.model = CrossEncoder(model_name)
 
-    def rerank(self, query: str, passages: List[str], top_k: int) -> List[RerankHit]:
+    def rerank(self, query: str, passages: list[str], top_k: int) -> list[RerankHit]:
         pairs = [(query, p) for p in passages]
         scores = self.model.predict(pairs)
         ranked = sorted(enumerate(scores), key=lambda x: float(x[1]), reverse=True)[:top_k]

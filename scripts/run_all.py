@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from scripts.ingest_data import ingest_main
 from scripts.build_index import build_index_main
+from scripts.ingest_data import ingest_main
 from scripts.run_eval import run_eval_main
 
 

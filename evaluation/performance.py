@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
 
 
 def percentile(values: Iterable[float], p: float) -> float:
@@ -12,7 +12,7 @@ def percentile(values: Iterable[float], p: float) -> float:
     - Deterministic and easy to test.
     """
 
-    xs: List[float] = sorted([float(v) for v in values])
+    xs: list[float] = sorted([float(v) for v in values])
     if not xs:
         return 0.0
     if p <= 0:

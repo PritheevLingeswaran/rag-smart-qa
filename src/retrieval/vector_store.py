@@ -4,7 +4,7 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -17,7 +17,7 @@ class IndexedChunk:
     source: str
     page: int
     text: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -26,11 +26,13 @@ class SearchHit:
     score: float  # normalized similarity-like score in [0,1]
 
 
-def _to_float_matrix(vectors: Any) -> List[List[float]]:
+def _to_float_matrix(vectors: Any) -> list[list[float]]:
     """Convert embeddings into Chroma-compatible List[List[float]]."""
     if hasattr(vectors, "detach"):  # torch.Tensor
         vectors = vectors.detach().cpu().numpy()
-    elif isinstance(vectors, list) and vectors and hasattr(vectors[0], "detach"):  # list[torch.Tensor]
+    elif (
+        isinstance(vectors, list) and vectors and hasattr(vectors[0], "detach")
+    ):  # list[torch.Tensor]
         vectors = np.stack([v.detach().cpu().numpy() for v in vectors], axis=0)
 
     vectors = np.asarray(vectors, dtype=np.float32)
@@ -38,12 +40,14 @@ def _to_float_matrix(vectors: Any) -> List[List[float]]:
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, -1)
     elif vectors.ndim != 2:
-        raise ValueError(f"Embeddings must be 1D or 2D. Got shape {vectors.shape} (ndim={vectors.ndim}).")
+        raise ValueError(
+            f"Embeddings must be 1D or 2D. Got shape {vectors.shape} (ndim={vectors.ndim})."
+        )
 
     return vectors.tolist()
 
 
-def _to_float_vector(vector: Any) -> List[float]:
+def _to_float_vector(vector: Any) -> list[float]:
     """Convert single query vector into List[float] for Chroma query."""
     if hasattr(vector, "detach"):
         vector = vector.detach().cpu().numpy()
@@ -55,7 +59,7 @@ def _to_float_vector(vector: Any) -> List[float]:
 
 class VectorStore(ABC):
     @abstractmethod
-    def add(self, chunks: List[IndexedChunk], vectors: Any) -> None:
+    def add(self, chunks: list[IndexedChunk], vectors: Any) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -63,8 +67,8 @@ class VectorStore(ABC):
         self,
         query_vector: Any,
         top_k: int,
-        filter_source_substr: Optional[str] = None,
-    ) -> List[SearchHit]:
+        filter_source_substr: str | None = None,
+    ) -> list[SearchHit]:
         raise NotImplementedError
 
     @abstractmethod
@@ -73,7 +77,7 @@ class VectorStore(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, settings: Settings) -> "VectorStore":
+    def load(cls, settings: Settings) -> VectorStore:
         raise NotImplementedError
 
 
@@ -87,7 +91,7 @@ class ChromaVectorStore(VectorStore):
         self._client = chromadb.PersistentClient(path=self.persist_dir)
         self._collection = self._client.get_or_create_collection(name=self.collection_name)
 
-    def add(self, chunks: List[IndexedChunk], vectors: Any) -> None:
+    def add(self, chunks: list[IndexedChunk], vectors: Any) -> None:
         if not chunks:
             return
 
@@ -98,11 +102,15 @@ class ChromaVectorStore(VectorStore):
         emb = _to_float_matrix(vectors)
 
         if len(emb) != len(chunks):
-            raise ValueError(f"Embeddings count mismatch: got {len(emb)} vectors for {len(chunks)} chunks.")
+            raise ValueError(
+                f"Embeddings count mismatch: got {len(emb)} vectors for {len(chunks)} chunks."
+            )
 
         self._collection.add(ids=ids, documents=docs, embeddings=emb, metadatas=metas)
 
-    def search(self, query_vector: Any, top_k: int, filter_source_substr: Optional[str] = None) -> List[SearchHit]:
+    def search(
+        self, query_vector: Any, top_k: int, filter_source_substr: str | None = None
+    ) -> list[SearchHit]:
         q = _to_float_vector(query_vector)
 
         res = self._collection.query(
@@ -116,7 +124,7 @@ class ChromaVectorStore(VectorStore):
         metas = (res.get("metadatas") or [[]])[0]
         dists = (res.get("distances") or [[]])[0]
 
-        hits: List[SearchHit] = []
+        hits: list[SearchHit] = []
         for cid, doc, meta, dist in zip(ids, docs, metas, dists):
             meta = meta or {}
             source = str(meta.get("source", ""))
@@ -143,7 +151,7 @@ class ChromaVectorStore(VectorStore):
         return
 
     @classmethod
-    def load(cls, settings: Settings) -> "ChromaVectorStore":
+    def load(cls, settings: Settings) -> ChromaVectorStore:
         return cls(settings)
 
 
@@ -152,14 +160,16 @@ class FaissVectorStore(VectorStore):
         try:
             import faiss  # type: ignore
         except Exception as e:  # pragma: no cover
-            raise ImportError("faiss is not installed. Install faiss-cpu to use this backend.") from e
+            raise ImportError(
+                "faiss is not installed. Install faiss-cpu to use this backend."
+            ) from e
 
         self._faiss = faiss
         self.settings = settings
         self.metric = settings.vector_store.faiss.metric
         self.normalize = settings.vector_store.faiss.normalize
         self.index = None
-        self.chunks: List[IndexedChunk] = []
+        self.chunks: list[IndexedChunk] = []
 
         self.persist_dir = Path(settings.paths.indexes_dir) / "faiss"
         self.persist_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +179,7 @@ class FaissVectorStore(VectorStore):
             return self._faiss.IndexFlatIP(dim)
         return self._faiss.IndexFlatL2(dim)
 
-    def add(self, chunks: List[IndexedChunk], vectors: Any) -> None:
+    def add(self, chunks: list[IndexedChunk], vectors: Any) -> None:
         if not chunks:
             return
         x = np.array(vectors, dtype="float32")
@@ -180,14 +190,16 @@ class FaissVectorStore(VectorStore):
         self.index.add(x)
         self.chunks.extend(chunks)
 
-    def search(self, query_vector: List[float], top_k: int, filter_source_substr: Optional[str] = None) -> List[SearchHit]:
+    def search(
+        self, query_vector: list[float], top_k: int, filter_source_substr: str | None = None
+    ) -> list[SearchHit]:
         if self.index is None:
             return []
         q = np.array([query_vector], dtype="float32")
         if self.metric == "cosine" and self.normalize:
             self._faiss.normalize_L2(q)
         D, I = self.index.search(q, top_k * 5)
-        hits: List[SearchHit] = []
+        hits: list[SearchHit] = []
         for dist, idx in zip(D[0].tolist(), I[0].tolist()):
             if idx < 0 or idx >= len(self.chunks):
                 continue
@@ -212,7 +224,7 @@ class FaissVectorStore(VectorStore):
                 f.write(json.dumps(c.__dict__, ensure_ascii=False) + "\n")
 
     @classmethod
-    def load(cls, settings: Settings) -> "FaissVectorStore":
+    def load(cls, settings: Settings) -> FaissVectorStore:
         store = cls(settings)
         idx_path = store.persist_dir / "index.faiss"
         meta_path = store.persist_dir / "chunks.jsonl"

@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.deps import get_settings
 from api.middleware import ObservabilityMiddleware
 from api.routes import router
-from api.deps import get_settings
 
 
 def create_app() -> FastAPI:

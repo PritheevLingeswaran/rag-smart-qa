@@ -5,14 +5,13 @@ import math
 import os
 import re
 from dataclasses import dataclass
-from typing import List
 
+from generation.prompts import load_prompt
 from retrieval.vector_store import SearchHit
 from schemas.response import Refusal, SourceChunk
 from utils.logging import get_logger
 from utils.openai_client import OpenAIClient
 from utils.settings import Settings
-from generation.prompts import load_prompt
 
 log = get_logger(__name__)
 
@@ -21,7 +20,7 @@ log = get_logger(__name__)
 class GenerationOutput:
     answer: str
     confidence: float
-    sources: List[SourceChunk]
+    sources: list[SourceChunk]
     refusal: Refusal
     llm_tokens_in: int
     llm_tokens_out: int
@@ -38,8 +37,8 @@ def _estimate_llm_cost(tokens_in: int, tokens_out: int) -> float:
     return (tokens_in / 1000.0) * in_rate + (tokens_out / 1000.0) * out_rate
 
 
-def _build_context(hits: List[SearchHit], max_chars: int = 16000) -> str:
-    parts: List[str] = []
+def _build_context(hits: list[SearchHit], max_chars: int = 16000) -> str:
+    parts: list[str] = []
     used = 0
     for h in hits:
         c = h.chunk
@@ -51,7 +50,7 @@ def _build_context(hits: List[SearchHit], max_chars: int = 16000) -> str:
     return "".join(parts)
 
 
-def _citations_ok(answer: str, cited: List[str]) -> bool:
+def _citations_ok(answer: str, cited: list[str]) -> bool:
     if not cited:
         return False
     for cid in cited:
@@ -75,7 +74,7 @@ class Answerer:
         self.template = load_prompt("prompts/answer_with_citations.txt")
         self.refusal_policy = load_prompt("prompts/refusal_policy.txt")
 
-    def generate(self, question: str, hits: List[SearchHit]) -> GenerationOutput:
+    def generate(self, question: str, hits: list[SearchHit]) -> GenerationOutput:
         if not hits:
             return GenerationOutput(
                 answer="I cannot answer from the provided documents because no relevant evidence was retrieved.",
@@ -124,7 +123,13 @@ class Answerer:
                     parsed = None
 
         sources = [
-            SourceChunk(chunk_id=h.chunk.chunk_id, source=h.chunk.source, page=h.chunk.page, score=h.score, text=h.chunk.text)
+            SourceChunk(
+                chunk_id=h.chunk.chunk_id,
+                source=h.chunk.source,
+                page=h.chunk.page,
+                score=h.score,
+                text=h.chunk.text,
+            )
             for h in hits
         ]
 
@@ -146,7 +151,11 @@ class Answerer:
         is_refusal = bool(refusal_obj.get("is_refusal", False))
         reason = str(refusal_obj.get("reason", "")).strip()
 
-        if self.settings.generation.strict_refusal and (not is_refusal) and (not _citations_ok(answer, cited)):
+        if (
+            self.settings.generation.strict_refusal
+            and (not is_refusal)
+            and (not _citations_ok(answer, cited))
+        ):
             is_refusal = True
             reason = "Answer did not include valid citations from retrieved evidence."
 

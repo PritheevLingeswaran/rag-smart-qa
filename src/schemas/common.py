@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
 
 
 class DocumentFilter(BaseModel):
-    source: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    source: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)

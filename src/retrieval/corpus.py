@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 from retrieval.vector_store import IndexedChunk
 
 
-def load_chunks_jsonl(path: str) -> Tuple[List[IndexedChunk], Dict[str, IndexedChunk]]:
+def load_chunks_jsonl(path: str) -> tuple[list[IndexedChunk], dict[str, IndexedChunk]]:
     """Load the canonical chunk corpus.
 
     Why this helper exists:
@@ -19,10 +18,12 @@ def load_chunks_jsonl(path: str) -> Tuple[List[IndexedChunk], Dict[str, IndexedC
 
     p = Path(path)
     if not p.exists():
-        raise FileNotFoundError(f"Missing chunks corpus at {path}. Run scripts/ingest_data.py first.")
+        raise FileNotFoundError(
+            f"Missing chunks corpus at {path}. Run scripts/ingest_data.py first."
+        )
 
-    chunks: List[IndexedChunk] = []
-    by_id: Dict[str, IndexedChunk] = {}
+    chunks: list[IndexedChunk] = []
+    by_id: dict[str, IndexedChunk] = {}
 
     with p.open("r", encoding="utf-8") as f:
         for line in f:

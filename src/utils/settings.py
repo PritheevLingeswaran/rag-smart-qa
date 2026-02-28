@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
-from typing import Literal, Optional, List, Dict, Any
 
 
 class PathsConfig(BaseModel):
@@ -14,7 +15,7 @@ class PathsConfig(BaseModel):
 
 
 class IngestionConfig(BaseModel):
-    supported_extensions: List[str] = Field(default_factory=lambda: [".pdf", ".txt"])
+    supported_extensions: list[str] = Field(default_factory=lambda: [".pdf", ".txt"])
 
 
 class CleaningConfig(BaseModel):
@@ -35,9 +36,9 @@ class PreprocessingConfig(BaseModel):
 
 
 class OpenAIEmbeddingsConfig(BaseModel):
-    base_url: Optional[str] = None
-    api_key: Optional[str] = None
-    organization: Optional[str] = None
+    base_url: str | None = None
+    api_key: str | None = None
+    organization: str | None = None
     request_timeout_s: float = 30.0
     max_retries: int = 3
     usd_per_1k_tokens: float = 0.0
@@ -52,7 +53,9 @@ class EmbeddingsConfig(BaseModel):
     model: str = "text-embedding-3-small"
     batch_size: int = 64
     openai: OpenAIEmbeddingsConfig = Field(default_factory=OpenAIEmbeddingsConfig)
-    sentence_transformers: SentenceTransformersConfig = Field(default_factory=SentenceTransformersConfig)
+    sentence_transformers: SentenceTransformersConfig = Field(
+        default_factory=SentenceTransformersConfig
+    )
 
 
 class FaissConfig(BaseModel):
@@ -66,8 +69,8 @@ class ChromaConfig(BaseModel):
 
 
 class PineconeConfig(BaseModel):
-    api_key: Optional[str] = None
-    environment: Optional[str] = None
+    api_key: str | None = None
+    environment: str | None = None
     index_name: str = "rag-smart-qa"
 
 
@@ -114,7 +117,7 @@ class GenerationConfig(BaseModel):
 
 
 class CorsConfig(BaseModel):
-    allow_origins: List[str] = Field(default_factory=lambda: ["*"])
+    allow_origins: list[str] = Field(default_factory=lambda: ["*"])
 
 
 class APIConfig(BaseModel):

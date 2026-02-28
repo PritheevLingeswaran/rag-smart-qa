@@ -1,15 +1,27 @@
 from fastapi.testclient import TestClient
 
-from api.app import create_app
 from api import deps
+from api.app import create_app
 from schemas.response import Refusal, SourceChunk
 
 
 class DummyRetriever:
     def retrieve(self, question: str, top_k: int, filter_source_substr=None, rewrite_override=None):
         from retrieval.vector_store import IndexedChunk, SearchHit
-        chunk = IndexedChunk(chunk_id="x:p1:c0", source="doc.txt", page=1, text="Warranty is 12 months.", metadata={})
-        return type("R", (), {"query_used": question, "hits": [SearchHit(chunk=chunk, score=0.9)], "embedding_tokens": 0, "embedding_cost_usd": 0.0})
+
+        chunk = IndexedChunk(
+            chunk_id="x:p1:c0", source="doc.txt", page=1, text="Warranty is 12 months.", metadata={}
+        )
+        return type(
+            "R",
+            (),
+            {
+                "query_used": question,
+                "hits": [SearchHit(chunk=chunk, score=0.9)],
+                "embedding_tokens": 0,
+                "embedding_cost_usd": 0.0,
+            },
+        )
 
 
 class DummyAnswerer:
@@ -20,7 +32,15 @@ class DummyAnswerer:
             {
                 "answer": "The warranty period is 12 months. [x:p1:c0]",
                 "confidence": 0.9,
-                "sources": [SourceChunk(chunk_id="x:p1:c0", source="doc.txt", page=1, score=0.9, text="Warranty is 12 months.")],
+                "sources": [
+                    SourceChunk(
+                        chunk_id="x:p1:c0",
+                        source="doc.txt",
+                        page=1,
+                        score=0.9,
+                        text="Warranty is 12 months.",
+                    )
+                ],
                 "refusal": Refusal(is_refusal=False, reason=""),
                 "llm_tokens_in": 0,
                 "llm_tokens_out": 0,

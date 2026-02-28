@@ -4,7 +4,6 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Set
 
 from api.deps import get_answerer, get_retriever, get_settings
 from evaluation.confidence_calibration import expected_calibration_error
@@ -26,11 +25,11 @@ class Example:
     id: str
     question: str
     answer: str
-    relevant_chunk_ids: Set[str]
+    relevant_chunk_ids: set[str]
 
 
-def _load_dataset(path: str) -> List[Example]:
-    exs: List[Example] = []
+def _load_dataset(path: str) -> list[Example]:
+    exs: list[Example] = []
     p = Path(path)
     with p.open("r", encoding="utf-8") as f:
         for line in f:
@@ -57,28 +56,28 @@ def evaluate_main() -> None:
     k = settings.vector_store.top_k
 
     # Retrieval metrics (dense vs hybrid). We always compute both when possible.
-    dense_p_at_k: List[float] = []
-    dense_r_at_k: List[float] = []
-    dense_mrrs: List[float] = []
+    dense_p_at_k: list[float] = []
+    dense_r_at_k: list[float] = []
+    dense_mrrs: list[float] = []
 
-    hybrid_p_at_k: List[float] = []
-    hybrid_r_at_k: List[float] = []
-    hybrid_mrrs: List[float] = []
+    hybrid_p_at_k: list[float] = []
+    hybrid_r_at_k: list[float] = []
+    hybrid_mrrs: list[float] = []
 
-    improved_recall_ids: List[str] = []
-    hurt_precision_ids: List[str] = []
-    improved_recall_samples: List[str] = []
-    hurt_precision_samples: List[str] = []
-    ems: List[int] = []
-    f1s: List[float] = []
-    hallucinated: List[int] = []
-    confs: List[float] = []
-    costs: List[float] = []
+    improved_recall_ids: list[str] = []
+    hurt_precision_ids: list[str] = []
+    improved_recall_samples: list[str] = []
+    hurt_precision_samples: list[str] = []
+    ems: list[int] = []
+    f1s: list[float] = []
+    hallucinated: list[int] = []
+    confs: list[float] = []
+    costs: list[float] = []
 
     # Latency measurements (seconds)
-    retrieval_lat_s: List[float] = []
-    generation_lat_s: List[float] = []
-    e2e_lat_s: List[float] = []
+    retrieval_lat_s: list[float] = []
+    generation_lat_s: list[float] = []
+    e2e_lat_s: list[float] = []
 
     # Corpus stats (chunk count / sources). This helps quantify scale.
     corpus_chunks = 0
@@ -107,11 +106,15 @@ def evaluate_main() -> None:
     for ex in dataset:
         # For a clean dense-vs-hybrid comparison, we disable query rewriting.
         t0 = time.perf_counter()
-        r_dense = retriever.retrieve(ex.question, top_k=k, rewrite_override=False, mode_override="dense")
+        r_dense = retriever.retrieve(
+            ex.question, top_k=k, rewrite_override=False, mode_override="dense"
+        )
         dense_lat = time.perf_counter() - t0
 
         t1 = time.perf_counter()
-        r_hybrid = retriever.retrieve(ex.question, top_k=k, rewrite_override=False, mode_override="hybrid")
+        r_hybrid = retriever.retrieve(
+            ex.question, top_k=k, rewrite_override=False, mode_override="hybrid"
+        )
         hybrid_lat = time.perf_counter() - t1
 
         dense_ids = [h.chunk.chunk_id for h in r_dense.hits]
@@ -167,23 +170,25 @@ def evaluate_main() -> None:
         src_texts = [h.chunk.text for h in r.hits]
         grounded = heuristic_grounded(g.answer, src_texts)
         if judge_client is not None:
-            grounded = llm_judge_grounded(judge_client, settings.evaluation.judge_model, ex.question, g.answer, src_texts)
+            grounded = llm_judge_grounded(
+                judge_client, settings.evaluation.judge_model, ex.question, g.answer, src_texts
+            )
         hallucinated.append(0 if grounded or g.refusal.is_refusal else 1)
 
     if dense_p_at_k and hybrid_p_at_k:
         dense_block = (
-            f"- dense precision@{k}: {sum(dense_p_at_k)/len(dense_p_at_k):.3f}\n"
-            f"- dense recall@{k}: {sum(dense_r_at_k)/len(dense_r_at_k):.3f}\n"
-            f"- dense MRR: {sum(dense_mrrs)/len(dense_mrrs):.3f}\n"
+            f"- dense precision@{k}: {sum(dense_p_at_k) / len(dense_p_at_k):.3f}\n"
+            f"- dense recall@{k}: {sum(dense_r_at_k) / len(dense_r_at_k):.3f}\n"
+            f"- dense MRR: {sum(dense_mrrs) / len(dense_mrrs):.3f}\n"
         )
         hybrid_block = (
-            f"- hybrid precision@{k}: {sum(hybrid_p_at_k)/len(hybrid_p_at_k):.3f}\n"
-            f"- hybrid recall@{k}: {sum(hybrid_r_at_k)/len(hybrid_r_at_k):.3f}\n"
-            f"- hybrid MRR: {sum(hybrid_mrrs)/len(hybrid_mrrs):.3f}\n"
+            f"- hybrid precision@{k}: {sum(hybrid_p_at_k) / len(hybrid_p_at_k):.3f}\n"
+            f"- hybrid recall@{k}: {sum(hybrid_r_at_k) / len(hybrid_r_at_k):.3f}\n"
+            f"- hybrid MRR: {sum(hybrid_mrrs) / len(hybrid_mrrs):.3f}\n"
         )
         delta_block = (
-            f"- Δprecision@{k}: {(sum(hybrid_p_at_k)/len(hybrid_p_at_k)) - (sum(dense_p_at_k)/len(dense_p_at_k)):+.3f}\n"
-            f"- Δrecall@{k}: {(sum(hybrid_r_at_k)/len(hybrid_r_at_k)) - (sum(dense_r_at_k)/len(dense_r_at_k)):+.3f}\n"
+            f"- Δprecision@{k}: {(sum(hybrid_p_at_k) / len(hybrid_p_at_k)) - (sum(dense_p_at_k) / len(dense_p_at_k)):+.3f}\n"
+            f"- Δrecall@{k}: {(sum(hybrid_r_at_k) / len(hybrid_r_at_k)) - (sum(dense_r_at_k) / len(dense_r_at_k)):+.3f}\n"
         )
         case_block = (
             f"- examples with improved recall: {len(improved_recall_ids)}\n"

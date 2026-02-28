@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List
 
 from ingestion.loaders import Page, iter_documents, load_pdf, load_txt
 from preprocessing.pipeline import preprocess_pages_to_chunks
@@ -21,7 +21,7 @@ class Chunk:
     page: int
     text: str
     text_sha256: str
-    metadata: Dict[str, object]
+    metadata: dict[str, object]
 
 
 def _chunk_id(source: str, page: int, idx: int) -> str:
@@ -29,7 +29,7 @@ def _chunk_id(source: str, page: int, idx: int) -> str:
     return f"{base}:p{page}:c{idx}"
 
 
-def _pages_from_path(path: Path) -> List[Page]:
+def _pages_from_path(path: Path) -> list[Page]:
     if path.suffix.lower() == ".pdf":
         return load_pdf(path)
     if path.suffix.lower() == ".txt":
@@ -37,15 +37,15 @@ def _pages_from_path(path: Path) -> List[Page]:
     raise ValueError(f"Unsupported file type: {path.suffix}")
 
 
-def ingest_documents(settings: Settings) -> List[Chunk]:
+def ingest_documents(settings: Settings) -> list[Chunk]:
     docs = list(iter_documents(settings.paths.raw_dir, settings.ingestion.supported_extensions))
     log.info("ingest.scan", raw_dir=settings.paths.raw_dir, num_files=len(docs))
 
-    chunks: List[Chunk] = []
+    chunks: list[Chunk] = []
     for doc in docs:
         pages = _pages_from_path(doc)
         page_chunks = preprocess_pages_to_chunks(settings, pages)
-        for (page_num, idx, text) in page_chunks:
+        for page_num, idx, text in page_chunks:
             cid = _chunk_id(str(doc), page_num, idx)
             chunks.append(
                 Chunk(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Literal
 
 from embeddings.factory import build_embeddings_backend
 from retrieval.bm25 import BM25DocHit, BM25PersistentIndex
@@ -13,19 +13,18 @@ from retrieval.vector_store import IndexedChunk, SearchHit, VectorStore
 from utils.openai_client import OpenAIClient
 from utils.settings import Settings
 
-
 RetrievalMode = Literal["dense", "hybrid"]
 
 
 @dataclass
 class RetrievalOutput:
     query_used: str
-    hits: List[SearchHit]
+    hits: list[SearchHit]
     embedding_tokens: int
     embedding_cost_usd: float
 
 
-def _normalize_bm25(hits: List[BM25DocHit]) -> Dict[str, float]:
+def _normalize_bm25(hits: list[BM25DocHit]) -> dict[str, float]:
     """Normalize BM25 scores into [0, 1] using max-score scaling.
 
     Why: BM25 scores are unbounded and not directly comparable to dense similarity scores.
@@ -67,10 +66,10 @@ class Retriever:
         )
 
         # Lazy-loaded sparse resources (only when hybrid retrieval is used).
-        self._bm25: Optional[BM25PersistentIndex] = None
-        self._chunk_by_id: Optional[Dict[str, IndexedChunk]] = None
+        self._bm25: BM25PersistentIndex | None = None
+        self._chunk_by_id: dict[str, IndexedChunk] | None = None
 
-    def _lazy_load_bm25_and_corpus(self) -> Tuple[BM25PersistentIndex, Dict[str, IndexedChunk]]:
+    def _lazy_load_bm25_and_corpus(self) -> tuple[BM25PersistentIndex, dict[str, IndexedChunk]]:
         if self._bm25 is None:
             bm25_dir = str(Path(self.settings.paths.indexes_dir) / "bm25")
             self._bm25 = BM25PersistentIndex.load(bm25_dir)
@@ -85,17 +84,17 @@ class Retriever:
     def _fuse_dense_and_sparse(
         self,
         *,
-        dense_hits: List[SearchHit],
-        sparse_hits: List[BM25DocHit],
-        chunk_by_id: Dict[str, IndexedChunk],
+        dense_hits: list[SearchHit],
+        sparse_hits: list[BM25DocHit],
+        chunk_by_id: dict[str, IndexedChunk],
         top_k: int,
-    ) -> List[SearchHit]:
+    ) -> list[SearchHit]:
         cfg = self.settings.retrieval.hybrid
 
         # Dense scores are already in [0,1]. Sparse scores are normalized to [0,1].
         sparse_norm = _normalize_bm25(sparse_hits)
-        dense_map: Dict[str, float] = {h.chunk.chunk_id: float(h.score) for h in dense_hits}
-        dense_chunks: Dict[str, IndexedChunk] = {h.chunk.chunk_id: h.chunk for h in dense_hits}
+        dense_map: dict[str, float] = {h.chunk.chunk_id: float(h.score) for h in dense_hits}
+        dense_chunks: dict[str, IndexedChunk] = {h.chunk.chunk_id: h.chunk for h in dense_hits}
 
         alpha = float(cfg.dense_weight)
         if not (0.0 <= alpha <= 1.0):
@@ -104,7 +103,7 @@ class Retriever:
         # Union of candidates: this is where hybrid recall gains come from.
         candidate_ids = set(dense_map.keys()) | set(sparse_norm.keys())
 
-        fused: List[SearchHit] = []
+        fused: list[SearchHit] = []
         for cid in candidate_ids:
             d = dense_map.get(cid, 0.0)
             s = sparse_norm.get(cid, 0.0)
@@ -124,9 +123,9 @@ class Retriever:
         self,
         question: str,
         top_k: int,
-        filter_source_substr: Optional[str] = None,
-        rewrite_override: Optional[bool] = None,
-        mode_override: Optional[RetrievalMode] = None,
+        filter_source_substr: str | None = None,
+        rewrite_override: bool | None = None,
+        mode_override: RetrievalMode | None = None,
     ) -> RetrievalOutput:
         # Decide mode.
         mode: RetrievalMode
@@ -135,8 +134,14 @@ class Retriever:
         else:
             mode = "hybrid" if self.settings.retrieval.hybrid.enabled else "dense"
 
-        do_rewrite = self.settings.retrieval.query_rewrite.enabled if rewrite_override is None else rewrite_override
-        query = rewrite_query(self.settings, self.rewrite_client, question) if do_rewrite else question
+        do_rewrite = (
+            self.settings.retrieval.query_rewrite.enabled
+            if rewrite_override is None
+            else rewrite_override
+        )
+        query = (
+            rewrite_query(self.settings, self.rewrite_client, question) if do_rewrite else question
+        )
 
         # Dense retrieval always happens (we need embeddings anyway to answer). We can still reduce
         # dense candidates in hybrid if you want, but in practice a slightly larger dense_k improves stability.
@@ -145,7 +150,9 @@ class Retriever:
 
         dense_k = int(self.settings.retrieval.hybrid.dense_k) if mode == "hybrid" else int(top_k)
         dense_k = max(int(top_k), dense_k)
-        dense_hits = self.store.search(q_vec, top_k=dense_k, filter_source_substr=filter_source_substr)
+        dense_hits = self.store.search(
+            q_vec, top_k=dense_k, filter_source_substr=filter_source_substr
+        )
 
         hits = dense_hits[:top_k]
 
@@ -172,7 +179,10 @@ class Retriever:
         if self.settings.retrieval.rerank.enabled and hits:
             rr = CrossEncoderReranker(self.settings.retrieval.rerank.model_name)
             reranked = rr.rerank(query, [h.chunk.text for h in hits], top_k=top_k)
-            hits = [SearchHit(chunk=hits[r.idx].chunk, score=min(1.0, max(0.0, float(r.score)))) for r in reranked]
+            hits = [
+                SearchHit(chunk=hits[r.idx].chunk, score=min(1.0, max(0.0, float(r.score))))
+                for r in reranked
+            ]
 
         # Min-score cutoff.
         hits = [h for h in hits if float(h.score) >= float(self.settings.retrieval.min_score)]

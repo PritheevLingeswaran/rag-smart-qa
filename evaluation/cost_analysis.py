@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass
@@ -11,7 +10,7 @@ class CostStats:
     total_cost_usd: float
 
 
-def summarize_cost(costs: List[float]) -> CostStats:
+def summarize_cost(costs: list[float]) -> CostStats:
     if not costs:
         return CostStats(avg_cost_usd=0.0, p95_cost_usd=0.0, total_cost_usd=0.0)
     s = sorted(costs)
