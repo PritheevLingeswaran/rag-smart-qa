@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
@@ -24,8 +25,8 @@ def healthz() -> HealthResponse:
 @router.post("/query", response_model=QueryResponse)
 def query(
     req: QueryRequest,
-    retriever=Depends(get_retriever),
-    answerer=Depends(get_answerer),
+    retriever: Annotated[object, Depends(get_retriever)],
+    answerer: Annotated[object, Depends(get_answerer)],
 ) -> QueryResponse:
     start = time.perf_counter()
     filter_sub = req.filter.source if req.filter and req.filter.source else None
