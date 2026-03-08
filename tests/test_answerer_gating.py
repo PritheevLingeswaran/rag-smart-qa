@@ -137,10 +137,10 @@ def test_answerer_extracts_education_from_spaced_resume_text() -> None:
                 "resume:p1:c6",
                 0.35,
                 "E D U C A T I O N\n"
-                "B . T e c h – C o m p u t e r S c i e n c e E n g i n e e r i n g "
+                "B . T e c h - C o m p u t e r S c i e n c e E n g i n e e r i n g "
                 "( A r t i f i c i a l I n t e l l i g e n c e & M a c h i n e L e a r n i n g )\n"
                 "S R M I n s t i t u t e o f S c i e n c e a n d T e c h n o l o g y\n"
-                "2 0 2 4 – 2 0 2 8 ( E x p e c t e d )",
+                "2 0 2 4 - 2 0 2 8 ( E x p e c t e d )",
             )
         ],
     )

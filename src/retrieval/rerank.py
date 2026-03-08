@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any, cast
 
 from retrieval.bm25 import BM25TextNormalizer
 from utils.settings import RerankConfig
@@ -55,10 +56,9 @@ class LexicalReranker(BaseReranker):
             lexical_score = coverage + (0.15 if query.lower() in passage.lower() else 0.0)
             if coverage < float(self.cfg.min_query_term_coverage):
                 lexical_score *= 0.5
-            score = (
-                float(self.cfg.query_weight) * lexical_score
-                + float(self.cfg.retrieval_weight) * float(base_score)
-            )
+            score = float(self.cfg.query_weight) * lexical_score + float(
+                self.cfg.retrieval_weight
+            ) * float(base_score)
             ranked.append((idx, float(score)))
 
         ranked.sort(key=lambda item: item[1], reverse=True)
@@ -85,7 +85,7 @@ class CrossEncoderReranker(BaseReranker):
     ) -> list[RerankHit]:
         del base_scores
         pairs = [(query, passage) for passage in passages]
-        scores = self.model.predict(pairs)
+        scores = cast(list[Any], self.model.predict(pairs))
         ranked = sorted(enumerate(scores), key=lambda item: float(item[1]), reverse=True)[:top_k]
         return [RerankHit(idx=i, score=float(s)) for i, s in ranked]
 
@@ -95,12 +95,15 @@ def build_reranker(cfg_key: tuple[object, ...]) -> BaseReranker:
     provider = str(cfg_key[0])
     if provider == "cross_encoder":
         return CrossEncoderReranker(model_name=str(cfg_key[1]))
+    query_weight = cast(float, cfg_key[2])
+    retrieval_weight = cast(float, cfg_key[3])
+    min_query_term_coverage = cast(float, cfg_key[4])
     cfg = RerankConfig(
         provider=provider,  # type: ignore[arg-type]
         model_name=str(cfg_key[1]),
-        query_weight=float(cfg_key[2]),
-        retrieval_weight=float(cfg_key[3]),
-        min_query_term_coverage=float(cfg_key[4]),
+        query_weight=query_weight,
+        retrieval_weight=retrieval_weight,
+        min_query_term_coverage=min_query_term_coverage,
     )
     return LexicalReranker(cfg)
 

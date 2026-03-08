@@ -155,11 +155,11 @@ def evaluate_main() -> None:
 
         tg0 = time.perf_counter()
         g = answerer.generate(ex.question, r.hits)
-        gen_lat = time.perf_counter() - tg0
+        generation_latency = time.perf_counter() - tg0
 
         retrieval_lat_s.append(selected_retrieval_lat)
-        generation_lat_s.append(gen_lat)
-        e2e_lat_s.append(selected_retrieval_lat + gen_lat)
+        generation_lat_s.append(generation_latency)
+        e2e_lat_s.append(selected_retrieval_lat + generation_latency)
 
         em = 1 if exact_match(g.answer, ex.answer) else 0
         ems.append(em)
@@ -206,9 +206,9 @@ def evaluate_main() -> None:
     ece, _ = expected_calibration_error(confs, ems, n_bins=10)
     cost_stats = summarize_cost(costs)
 
-    ret_lat = summarize_latency(retrieval_lat_s)
-    gen_lat = summarize_latency(generation_lat_s)
-    e2e_lat = summarize_latency(e2e_lat_s)
+    ret_latency = summarize_latency(retrieval_lat_s)
+    gen_latency = summarize_latency(generation_lat_s)
+    e2e_latency = summarize_latency(e2e_lat_s)
 
     load_block = "- (run scripts/load_test.py to generate load test results)\n"
     load_json = Path("docs/load_test_results.json")
@@ -239,10 +239,10 @@ def evaluate_main() -> None:
         "## Hallucination\n"
         f"- hallucination rate: {hall_rate:.3f}\n\n"
         "## Latency (local eval run)\n"
-        f"- retrieval p95 (ms): {ret_lat.p95_ms:.2f}\n"
-        f"- generation p95 (ms): {gen_lat.p95_ms:.2f}\n"
-        f"- end-to-end p95 (ms): {e2e_lat.p95_ms:.2f}\n"
-        f"- end-to-end avg (ms): {e2e_lat.avg_ms:.2f}\n\n"
+        f"- retrieval p95 (ms): {ret_latency.p95_ms:.2f}\n"
+        f"- generation p95 (ms): {gen_latency.p95_ms:.2f}\n"
+        f"- end-to-end p95 (ms): {e2e_latency.p95_ms:.2f}\n"
+        f"- end-to-end avg (ms): {e2e_latency.avg_ms:.2f}\n\n"
         "## Confidence Calibration\n"
         f"- ECE: {ece:.3f}\n\n"
         "## Cost\n"

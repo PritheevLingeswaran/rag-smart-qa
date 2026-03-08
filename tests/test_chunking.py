@@ -2,7 +2,7 @@ from preprocessing.chunking import chunk_text
 from utils.settings import ChunkingConfig
 
 
-def test_token_chunking_basic():
+def test_token_chunking_basic() -> None:
     cfg = ChunkingConfig(strategy="token", chunk_size=50, chunk_overlap=10)
     text = "Hello world. " * 200
     chunks = chunk_text(text, cfg)
@@ -10,7 +10,7 @@ def test_token_chunking_basic():
     assert all(c.text.strip() for c in chunks)
 
 
-def test_char_chunking_overlap():
+def test_char_chunking_overlap() -> None:
     cfg = ChunkingConfig(strategy="char", max_chars_fallback=50, chunk_overlap=10)
     text = "a" * 120
     chunks = chunk_text(text, cfg)

@@ -52,9 +52,7 @@ def validate_runtime_readiness() -> None:
     settings = get_settings()
     chunks_path = Path(settings.paths.chunks_dir) / "chunks.jsonl"
     if not chunks_path.exists():
-        raise RuntimeError(
-            f"Missing chunks file at {chunks_path}. Run ingest + build_index first."
-        )
+        raise RuntimeError(f"Missing chunks file at {chunks_path}. Run ingest + build_index first.")
 
     chunks_count = 0
     with chunks_path.open("r", encoding="utf-8") as f:
@@ -76,7 +74,6 @@ def validate_runtime_readiness() -> None:
         raise RuntimeError(
             "Vector store is empty. Run build_index and verify vector_store paths/config."
         )
-
 
 
 @lru_cache(maxsize=1)

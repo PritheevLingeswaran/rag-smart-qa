@@ -49,19 +49,14 @@ def _as_numpy_2d(vectors: Any) -> np.ndarray:
         and vectors[0]
         and hasattr(vectors[0][0], "detach")
     ):
-        vectors = [
-            [float(v.detach().cpu().item()) for v in row]
-            for row in vectors
-        ]
+        vectors = [[float(v.detach().cpu().item()) for v in row] for row in vectors]
 
     arr = np.asarray(vectors, dtype=np.float32)
 
     if arr.ndim == 1:
         arr = arr.reshape(1, -1)
     elif arr.ndim != 2:
-        raise ValueError(
-            f"Embeddings must be 1D or 2D. Got shape {arr.shape} (ndim={arr.ndim})."
-        )
+        raise ValueError(f"Embeddings must be 1D or 2D. Got shape {arr.shape} (ndim={arr.ndim}).")
     return arr
 
 

@@ -82,7 +82,9 @@ def _citation_coverage(answer: str, retrieved_ids: list[str]) -> float:
     return float(len(cited) / len(retrieved_ids))
 
 
-def _classify_answerability(settings: Settings, question: str, hits: list[SearchHit]) -> tuple[str, str]:
+def _classify_answerability(
+    settings: Settings, question: str, hits: list[SearchHit]
+) -> tuple[str, str]:
     if not hits:
         return "not_answerable", "No retrieved evidence above threshold."
 
@@ -103,10 +105,9 @@ def _classify_answerability(settings: Settings, question: str, hits: list[Search
     direct_term_hits = sum(1 for term in query_terms if term in normalized_context)
     direct_term_coverage = (direct_term_hits / len(query_terms)) if query_terms else 1.0
 
-    if (
-        len(supporting_hits) >= int(cfg.min_supporting_hits)
-        and max(term_coverage, direct_term_coverage) >= float(cfg.min_query_term_coverage)
-    ):
+    if len(supporting_hits) >= int(cfg.min_supporting_hits) and max(
+        term_coverage, direct_term_coverage
+    ) >= float(cfg.min_query_term_coverage):
         return "answerable", ""
     if top_score >= float(cfg.answerable_top_score) and direct_term_hits > 0:
         return "answerable", ""
@@ -125,7 +126,7 @@ def _classify_answerability(settings: Settings, question: str, hits: list[Search
     )
 
 
-def _fallback_extract_answer(  # noqa: PLR0911, PLR0912, PLR0915
+def _fallback_extract_answer(
     question: str, hits: list[SearchHit]
 ) -> tuple[str, bool, str]:
     """Return a deterministic local answer when LLM generation is unavailable."""
@@ -159,8 +160,14 @@ def _fallback_extract_answer(  # noqa: PLR0911, PLR0912, PLR0915
             return None
         qq = re.sub(r"\s+", " ", q).strip()
         rules: list[tuple[list[str], str]] = [
-            (["source documents", "documents indexed", "number of source documents"], "number of source documents"),
-            (["source documents", "documents indexed", "number of source documents"], "documents indexed"),
+            (
+                ["source documents", "documents indexed", "number of source documents"],
+                "number of source documents",
+            ),
+            (
+                ["source documents", "documents indexed", "number of source documents"],
+                "documents indexed",
+            ),
             (["uptime"], "uptime (%)"),
             (["error rate"], "error rate (%)"),
             (["crash rate"], "crash rate under load"),
@@ -260,8 +267,7 @@ def _fallback_extract_answer(  # noqa: PLR0911, PLR0912, PLR0915
     if (
         ("candidate's education" in q or "what degree" in q or "education institution" in q)
         and (
-            "btechcomputerscienceengineeringartificialintelligencemachinelearning"
-            in resume_compact
+            "btechcomputerscienceengineeringartificialintelligencemachinelearning" in resume_compact
         )
         and "srminstituteofscienceandtechnology" in resume_compact
     ):
@@ -289,9 +295,8 @@ def _fallback_extract_answer(  # noqa: PLR0911, PLR0912, PLR0915
             return "; ".join(cert_hits), False, ""
 
     if (
-        ("candidate's role" in q or "role mentioned" in q)
-        and "machinelearningintern" in resume_text
-    ):
+        "candidate's role" in q or "role mentioned" in q
+    ) and "machinelearningintern" in resume_text:
         return "Machine Learning Intern", False, ""
 
     yn_map = [
@@ -346,7 +351,7 @@ class Answerer:
         self.refusal_policy = load_prompt("prompts/refusal_policy.txt")
         self._disable_remote_generation = not bool(oai.api_key)
 
-    def generate(  # noqa: PLR0911, PLR0912
+    def generate(
         self, question: str, hits: list[SearchHit]
     ) -> GenerationOutput:
         if not hits:

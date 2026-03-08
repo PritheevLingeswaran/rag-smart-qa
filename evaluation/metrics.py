@@ -21,7 +21,7 @@ def token_f1(pred: str, gold: str) -> float:
         return 1.0
     if not p or not g:
         return 0.0
-    common = {}
+    common: dict[str, int] = {}
     for t in p:
         common[t] = common.get(t, 0) + 1
     overlap = 0

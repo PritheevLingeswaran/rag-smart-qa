@@ -5,7 +5,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import httpx
@@ -96,7 +96,7 @@ async def call_retriever(
         r = await client.request(method.upper(), url, json=payload, timeout=timeout_s)
 
     r.raise_for_status()
-    return r.json()
+    return cast(Dict[str, Any], r.json())
 
 
 def extract_doc_ids(resp_json: Dict[str, Any]) -> List[str]:
@@ -492,7 +492,8 @@ async def stability_test(
     buckets: Dict[int, List[ReqResult]] = {}
 
     async with httpx.AsyncClient() as client:
-        async def one_loop(worker_id: int):
+        async def one_loop(worker_id: int) -> None:
+            del worker_id
             while time.time() < stop_at:
                 async with sem:
                     start = time.perf_counter()
@@ -570,10 +571,10 @@ async def stability_test(
 def parse_payload(payload_str: str) -> Dict[str, Any]:
     if not payload_str:
         return {}
-    return json.loads(payload_str)
+    return cast(Dict[str, Any], json.loads(payload_str))
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description="Measure production-grade metrics for RAG/ML systems.")
     ap.add_argument("--mode", required=True,
                     choices=["corpus", "retrieval-eval", "grounding-export", "grounding-autolabel", "grounding-score", "stability"],

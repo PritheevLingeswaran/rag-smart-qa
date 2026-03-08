@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 
-.PHONY: install fmt lint test run ingest index eval loadtest all docker-build docker-up docker-down stats eval-retrieval eval-grounding stability-60m
+QUALITY_PATHS := src tests evaluation/resume_metrics.py
+
+.PHONY: install fmt lint typecheck test run ingest index eval loadtest all docker-build docker-up docker-down stats eval-retrieval eval-grounding stability-60m
 
 install:
 	python -m pip install -U pip
@@ -11,8 +13,10 @@ fmt:
 	ruff format .
 
 lint:
-	ruff check .
-	mypy .
+	ruff check $(QUALITY_PATHS)
+
+typecheck:
+	mypy $(QUALITY_PATHS)
 
 test:
 	PYTHONPATH=src pytest -q

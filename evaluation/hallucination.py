@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 
 from utils.openai_client import OpenAIClient
 
@@ -46,4 +47,4 @@ def llm_judge_grounded(
         temperature=0.0,
         max_output_tokens=5,
     )
-    return text.strip().lower().startswith("yes")
+    return cast(bool, text.strip().lower().startswith("yes"))

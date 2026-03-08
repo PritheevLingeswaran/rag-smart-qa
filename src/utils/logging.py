@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import logging.config
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 import yaml
@@ -31,4 +31,4 @@ def configure_logging(config_path: str = "configs/logging.yaml", level: str = "I
 
 
 def get_logger(name: str = "rag-smart-qa") -> structlog.BoundLogger:
-    return structlog.get_logger(name)
+    return cast(structlog.BoundLogger, structlog.get_logger(name))

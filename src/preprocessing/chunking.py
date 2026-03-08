@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import tiktoken
@@ -28,12 +29,22 @@ class TokenChunker:
     def split(self, text: str) -> list[TextChunk]:
         if not text:
             return []
+        tokens: list[int] | list[str]
+        decode: Callable[[list[int] | list[str]], str]
         if self.enc is not None:
             tokens = self.enc.encode(text)
-            decode = lambda toks: self.enc.decode(toks)
+
+            def decode(toks: list[int] | list[str]) -> str:
+                if self.enc is None:
+                    raise RuntimeError("Tokenizer unexpectedly unavailable")
+                return self.enc.decode([int(tok) for tok in toks])
+
         else:
             tokens = text.split()
-            decode = lambda toks: " ".join(toks)
+
+            def decode(toks: list[int] | list[str]) -> str:
+                return " ".join(str(tok) for tok in toks)
+
         size = self.cfg.chunk_size
         overlap = self.cfg.chunk_overlap
         out: list[TextChunk] = []

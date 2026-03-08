@@ -3,8 +3,8 @@ from __future__ import annotations
 from sentence_transformers import SentenceTransformer
 
 from embeddings.base import EmbeddingsBackend, EmbedResult
-from utils.token_counting import estimate_batch_tokens
 from utils.settings import EmbeddingsConfig
+from utils.token_counting import estimate_batch_tokens
 
 
 class SentenceTransformersEmbeddingsBackend(EmbeddingsBackend):

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import pickle
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from rank_bm25 import BM25Okapi
+
 from utils.settings import BM25Config
 
 _DEFAULT_STOPWORDS = {
@@ -39,6 +41,7 @@ _DEFAULT_STOPWORDS = {
     "who",
     "with",
 }
+_EN_DASH = "\N{EN DASH}"
 
 
 def _simple_stem(token: str) -> str:
@@ -60,14 +63,11 @@ class BM25TextNormalizer:
             lambda match: re.sub(r"\s+", "", match.group(0)),
             text,
         )
-        return collapsed.replace("–", "-")
+        return collapsed.replace(_EN_DASH, "-")
 
     def tokenize(self, text: str) -> list[str]:
         text = self.normalize_text(text)
-        if self.cfg.strip_punctuation:
-            tokens = self._pattern.findall(text)
-        else:
-            tokens = text.split()
+        tokens = self._pattern.findall(text) if self.cfg.strip_punctuation else text.split()
         out: list[str] = []
         for token in tokens:
             t = token.lower() if self.cfg.lowercase else token
@@ -89,13 +89,14 @@ class BM25Hit:
 
 
 class BM25Index:
-    def __init__(self, texts: list[str]) -> None:
+    def __init__(self, texts: list[str], cfg: BM25Config | None = None) -> None:
         self.texts = texts
-        self.tokens = [_tokenize(t) for t in texts]
+        self._normalizer = BM25TextNormalizer(cfg)
+        self.tokens = [self._normalizer.tokenize(t) for t in texts]
         self.bm25 = BM25Okapi(self.tokens)
 
     def query(self, q: str, top_k: int) -> list[BM25Hit]:
-        scores = self.bm25.get_scores(_tokenize(q))
+        scores = self.bm25.get_scores(self._normalizer.tokenize(q))
         ranked = sorted(enumerate(scores), key=lambda x: float(x[1]), reverse=True)[:top_k]
         return [BM25Hit(idx=i, score=float(s)) for i, s in ranked]
 
@@ -158,8 +159,6 @@ class BM25PersistentIndex:
         )
 
     def save(self, index_dir: str) -> None:
-        import pickle
-
         out = Path(index_dir)
         out.mkdir(parents=True, exist_ok=True)
         meta = {
@@ -180,9 +179,6 @@ class BM25PersistentIndex:
 
     @classmethod
     def load(cls, index_dir: str) -> BM25PersistentIndex:
-        import json
-        import pickle
-
         p = Path(index_dir)
         meta_path = p / "meta.json"
         data_path = p / "bm25.pkl"

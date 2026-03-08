@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from embeddings.factory import build_embeddings_backend
 from retrieval.bm25 import BM25DocHit, BM25PersistentIndex
@@ -26,7 +26,7 @@ class RetrievalOutput:
     hits: list[SearchHit]
     embedding_tokens: int
     embedding_cost_usd: float
-    debug: dict[str, object] | None = None
+    debug: dict[str, Any] | None = None
 
 
 def _normalize_bm25(hits: list[BM25DocHit]) -> dict[str, float]:
@@ -94,7 +94,7 @@ class Retriever:
         sparse_hits: list[BM25DocHit],
         chunk_by_id: dict[str, IndexedChunk],
         top_k: int,
-    ) -> tuple[list[SearchHit], dict[str, object]]:
+    ) -> tuple[list[SearchHit], dict[str, Any]]:
         cfg = self.settings.retrieval.hybrid
 
         # Dense scores are already in [0,1]. Sparse scores are normalized to [0,1].
@@ -110,7 +110,7 @@ class Retriever:
         candidate_ids = set(dense_map.keys()) | set(sparse_norm.keys())
 
         fused: list[SearchHit] = []
-        explanation: dict[str, object] = {
+        explanation: dict[str, Any] = {
             "fusion_method": cfg.fusion_method,
             "candidate_count": len(candidate_ids),
             "rrf_k": int(cfg.rrf_k),
@@ -171,7 +171,7 @@ class Retriever:
             if not filter_source_substr:
                 return True
             c = chunk_by_id.get(cid)
-            return bool(c) and (filter_source_substr in c.source)
+            return c is not None and filter_source_substr in c.source
 
         sparse_hits = bm25.query(
             query,
@@ -253,7 +253,7 @@ class Retriever:
         cached = self._get_cached(cache_key)
         if cached is not None:
             return cached
-        debug: dict[str, object] = {
+        debug: dict[str, Any] = {
             "mode": mode,
             "question": question,
             "query_used": query,
@@ -278,7 +278,9 @@ class Retriever:
             hits, threshold_applied = self._apply_min_score_cutoff(
                 hits, float(self.settings.retrieval.min_score)
             )
-            top_scores = [round(float(h.score), 6) for h in hits[: self.settings.retrieval.debug_top_n]]
+            top_scores = [
+                round(float(h.score), 6) for h in hits[: self.settings.retrieval.debug_top_n]
+            ]
             debug["stage_counts"] = {
                 "bm25_hits": len(hits),
                 "final_hits": len(hits),
@@ -342,7 +344,7 @@ class Retriever:
                 if not filter_source_substr:
                     return True
                 c = chunk_by_id.get(cid)
-                return bool(c) and (filter_source_substr in c.source)
+                return c is not None and filter_source_substr in c.source
 
             sparse_k = int(self.settings.retrieval.hybrid.bm25_k)
             sparse_hits = bm25.query(query, top_k=max(int(top_k), sparse_k), filter_fn=_filter_fn)

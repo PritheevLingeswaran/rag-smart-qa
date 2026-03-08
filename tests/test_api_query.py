@@ -117,4 +117,6 @@ def test_metrics_endpoint_exposes_grounding_and_refusal_metrics() -> None:
     assert "rag_grounded_answers_total" in body
     assert "rag_retrieval_top_score" in body
     assert "rag_http_requests_total" in body
+
+
 os.environ["RAG_SKIP_STARTUP_VALIDATION"] = "1"

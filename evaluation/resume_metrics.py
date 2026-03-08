@@ -7,9 +7,10 @@ import re
 import socket
 import subprocess
 import time
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -79,11 +80,14 @@ def load_hallucination_examples(path: str) -> list[HallucinationExample]:
             if not line.strip():
                 continue
             obj = json.loads(line)
+            expected_behavior = str(obj["expected_behavior"])
+            if expected_behavior not in {"answer", "refuse"}:
+                raise ValueError(f"Invalid expected_behavior={expected_behavior!r} in {path}")
             rows.append(
                 HallucinationExample(
                     id=str(obj["id"]),
                     question=str(obj["question"]),
-                    expected_behavior=str(obj["expected_behavior"]),
+                    expected_behavior=cast(Literal["answer", "refuse"], expected_behavior),
                     acceptable_answers=[str(v) for v in obj.get("acceptable_answers", [])],
                     notes=str(obj.get("notes", "")),
                 )
@@ -510,7 +514,9 @@ def score_generation(
     source_ids = [source.chunk_id for source in generation.sources]
     refusal = bool(generation.refusal.is_refusal)
     valid_citation = has_valid_citation(generation.answer, source_ids) if not refusal else True
-    answer_ok = answer_matches(generation.answer, example.acceptable_answers) if not refusal else False
+    answer_ok = (
+        answer_matches(generation.answer, example.acceptable_answers) if not refusal else False
+    )
     refusal_correct = example.expected_behavior == "refuse" and refusal
     false_refusal = example.expected_behavior == "answer" and refusal
 
@@ -525,7 +531,9 @@ def score_generation(
 
     total_cost = None
     if generation.llm_cost_usd is not None:
-        total_cost = round(float(retrieval_result.embedding_cost_usd) + float(generation.llm_cost_usd), 8)
+        total_cost = round(
+            float(retrieval_result.embedding_cost_usd) + float(generation.llm_cost_usd), 8
+        )
 
     return {
         "id": example.id,
@@ -695,16 +703,28 @@ def build_refusal_report(hallucination_report: dict[str, Any]) -> dict[str, Any]
         "measured": True,
         "baseline_dense": {
             "false_refusal_rate": hallucination_report["baseline_dense"]["false_refusal_rate"],
-            "refusal_correctness_rate": hallucination_report["baseline_dense"]["refusal_correctness_rate"],
-            "supported_answer_rate": hallucination_report["baseline_dense"]["supported_answer_rate"],
+            "refusal_correctness_rate": hallucination_report["baseline_dense"][
+                "refusal_correctness_rate"
+            ],
+            "supported_answer_rate": hallucination_report["baseline_dense"][
+                "supported_answer_rate"
+            ],
             "citation_coverage": hallucination_report["baseline_dense"]["citation_coverage"],
             "answerability_breakdown": _answerability_breakdown(dense_rows),
         },
         "strict_grounded_hybrid": {
-            "false_refusal_rate": hallucination_report["strict_grounded_hybrid"]["false_refusal_rate"],
-            "refusal_correctness_rate": hallucination_report["strict_grounded_hybrid"]["refusal_correctness_rate"],
-            "supported_answer_rate": hallucination_report["strict_grounded_hybrid"]["supported_answer_rate"],
-            "citation_coverage": hallucination_report["strict_grounded_hybrid"]["citation_coverage"],
+            "false_refusal_rate": hallucination_report["strict_grounded_hybrid"][
+                "false_refusal_rate"
+            ],
+            "refusal_correctness_rate": hallucination_report["strict_grounded_hybrid"][
+                "refusal_correctness_rate"
+            ],
+            "supported_answer_rate": hallucination_report["strict_grounded_hybrid"][
+                "supported_answer_rate"
+            ],
+            "citation_coverage": hallucination_report["strict_grounded_hybrid"][
+                "citation_coverage"
+            ],
             "answerability_breakdown": _answerability_breakdown(hybrid_rows),
         },
     }
@@ -729,7 +749,9 @@ def build_cost_report(hallucination_report: dict[str, Any]) -> dict[str, Any]:
             "generation": "settings.generation.pricing for remote generation; null when running offline fallback",
         },
         "summary": {
-            "avg_embedding_tokens_per_query": round(mean([float(row["embedding_tokens"]) for row in rows]), 4),
+            "avg_embedding_tokens_per_query": round(
+                mean([float(row["embedding_tokens"]) for row in rows]), 4
+            ),
             "avg_input_tokens_per_query": _rounded_optional(
                 mean_optional([row["llm_tokens_in"] for row in rows]),
                 digits=4,
@@ -739,7 +761,9 @@ def build_cost_report(hallucination_report: dict[str, Any]) -> dict[str, Any]:
                 digits=4,
             ),
             "avg_cost_per_query_usd": _rounded_optional(mean_optional(measured_costs), digits=8),
-            "total_cost_usd": _rounded_optional(float(sum(measured_costs)) if measured_costs else None, digits=8),
+            "total_cost_usd": _rounded_optional(
+                float(sum(measured_costs)) if measured_costs else None, digits=8
+            ),
         },
     }
 
@@ -809,15 +833,16 @@ async def run_load_test(
     url = base_url.rstrip("/") + endpoint
 
     async with httpx.AsyncClient(
-        limits=httpx.Limits(max_connections=max(concurrency_levels), max_keepalive_connections=max(concurrency_levels)),
+        limits=httpx.Limits(
+            max_connections=max(concurrency_levels),
+            max_keepalive_connections=max(concurrency_levels),
+        ),
         timeout=timeout_s,
     ) as client:
         for i in range(min(warmup_requests, len(queries))):
             payload = {"query": queries[i % len(queries)], "top_k": top_k, "rewrite_query": False}
-            try:
+            with suppress(Exception):
                 await client.post(url, json=payload)
-            except Exception:
-                pass
 
         for concurrency in concurrency_levels:
             total_requests = max(requests_per_level, concurrency)
@@ -826,22 +851,28 @@ async def run_load_test(
             errors: list[str] = []
             started_wall = time.perf_counter()
 
-            async def one_request(index: int) -> None:
+            async def one_request(
+                index: int,
+                *,
+                limiter: asyncio.Semaphore = sem,
+                seen_latencies: list[float] = latencies_s,
+                seen_errors: list[str] = errors,
+            ) -> None:
                 payload = {
                     "query": queries[index % len(queries)],
                     "top_k": top_k,
                     "rewrite_query": False,
                 }
-                async with sem:
+                async with limiter:
                     started = time.perf_counter()
                     try:
                         response = await client.post(url, json=payload)
                         if 200 <= response.status_code < 300:
-                            latencies_s.append(time.perf_counter() - started)
+                            seen_latencies.append(time.perf_counter() - started)
                         else:
-                            errors.append(f"{response.status_code}:{response.text[:120]}")
+                            seen_errors.append(f"{response.status_code}:{response.text[:120]}")
                     except Exception as exc:
-                        errors.append(str(exc))
+                        seen_errors.append(str(exc))
 
             await asyncio.gather(*[one_request(i) for i in range(total_requests)])
             wall_time = time.perf_counter() - started_wall
@@ -899,24 +930,50 @@ def build_resume_metrics(
     load_test: dict[str, Any],
 ) -> dict[str, Any]:
     metrics: dict[str, Any] = {
-        "documents_indexed": dataset_stats.get("documents_indexed") if dataset_stats.get("measured") else None,
-        "chunks_indexed": dataset_stats.get("chunks_indexed") if dataset_stats.get("measured") else None,
+        "documents_indexed": dataset_stats.get("documents_indexed")
+        if dataset_stats.get("measured")
+        else None,
+        "chunks_indexed": dataset_stats.get("chunks_indexed")
+        if dataset_stats.get("measured")
+        else None,
         "vector_index_size_bytes": (
             dataset_stats.get("index_sizes_bytes", {}).get("vector_index")
             if dataset_stats.get("measured")
             else None
         ),
-        "avg_latency_ms_dense": latency_dense.get("summary", {}).get("avg_latency_ms") if latency_dense.get("measured") else None,
-        "p95_latency_ms_dense": latency_dense.get("summary", {}).get("p95_latency_ms") if latency_dense.get("measured") else None,
-        "avg_latency_ms_hybrid_weighted": latency_hybrid_weighted.get("summary", {}).get("avg_latency_ms") if latency_hybrid_weighted.get("measured") else None,
-        "p95_latency_ms_hybrid_weighted": latency_hybrid_weighted.get("summary", {}).get("p95_latency_ms") if latency_hybrid_weighted.get("measured") else None,
-        "avg_latency_ms_hybrid_rrf": latency_hybrid_rrf.get("summary", {}).get("avg_latency_ms") if latency_hybrid_rrf.get("measured") else None,
-        "p95_latency_ms_hybrid_rrf": latency_hybrid_rrf.get("summary", {}).get("p95_latency_ms") if latency_hybrid_rrf.get("measured") else None,
-        "max_tested_concurrency_successful": load_test.get("max_tested_concurrency_successful") if load_test.get("measured") else None,
+        "avg_latency_ms_dense": latency_dense.get("summary", {}).get("avg_latency_ms")
+        if latency_dense.get("measured")
+        else None,
+        "p95_latency_ms_dense": latency_dense.get("summary", {}).get("p95_latency_ms")
+        if latency_dense.get("measured")
+        else None,
+        "avg_latency_ms_hybrid_weighted": latency_hybrid_weighted.get("summary", {}).get(
+            "avg_latency_ms"
+        )
+        if latency_hybrid_weighted.get("measured")
+        else None,
+        "p95_latency_ms_hybrid_weighted": latency_hybrid_weighted.get("summary", {}).get(
+            "p95_latency_ms"
+        )
+        if latency_hybrid_weighted.get("measured")
+        else None,
+        "avg_latency_ms_hybrid_rrf": latency_hybrid_rrf.get("summary", {}).get("avg_latency_ms")
+        if latency_hybrid_rrf.get("measured")
+        else None,
+        "p95_latency_ms_hybrid_rrf": latency_hybrid_rrf.get("summary", {}).get("p95_latency_ms")
+        if latency_hybrid_rrf.get("measured")
+        else None,
+        "max_tested_concurrency_successful": load_test.get("max_tested_concurrency_successful")
+        if load_test.get("measured")
+        else None,
     }
 
     if retrieval.get("measured"):
-        for name, label in [("dense", "dense"), ("hybrid_weighted", "hybrid_weighted"), ("hybrid_rrf", "hybrid_rrf")]:
+        for name, label in [
+            ("dense", "dense"),
+            ("hybrid_weighted", "hybrid_weighted"),
+            ("hybrid_rrf", "hybrid_rrf"),
+        ]:
             mode = retrieval["modes"].get(name)
             if not mode:
                 continue
@@ -931,20 +988,38 @@ def build_resume_metrics(
 
     if hallucination.get("measured"):
         metrics["hallucination_rate_dense"] = hallucination["baseline_dense"]["hallucination_rate"]
-        metrics["hallucination_rate_hybrid"] = hallucination["strict_grounded_hybrid"]["hallucination_rate"]
-        metrics["citation_grounding_failure_rate_dense"] = hallucination["baseline_dense"]["citation_grounding_failure_rate"]
-        metrics["citation_grounding_failure_rate_hybrid"] = hallucination["strict_grounded_hybrid"]["citation_grounding_failure_rate"]
+        metrics["hallucination_rate_hybrid"] = hallucination["strict_grounded_hybrid"][
+            "hallucination_rate"
+        ]
+        metrics["citation_grounding_failure_rate_dense"] = hallucination["baseline_dense"][
+            "citation_grounding_failure_rate"
+        ]
+        metrics["citation_grounding_failure_rate_hybrid"] = hallucination["strict_grounded_hybrid"][
+            "citation_grounding_failure_rate"
+        ]
 
     if refusal_report.get("measured"):
         metrics["false_refusal_rate_dense"] = refusal_report["baseline_dense"]["false_refusal_rate"]
-        metrics["false_refusal_rate_hybrid"] = refusal_report["strict_grounded_hybrid"]["false_refusal_rate"]
-        metrics["supported_answer_rate_hybrid"] = refusal_report["strict_grounded_hybrid"]["supported_answer_rate"]
-        metrics["citation_coverage_hybrid"] = refusal_report["strict_grounded_hybrid"]["citation_coverage"]
+        metrics["false_refusal_rate_hybrid"] = refusal_report["strict_grounded_hybrid"][
+            "false_refusal_rate"
+        ]
+        metrics["supported_answer_rate_hybrid"] = refusal_report["strict_grounded_hybrid"][
+            "supported_answer_rate"
+        ]
+        metrics["citation_coverage_hybrid"] = refusal_report["strict_grounded_hybrid"][
+            "citation_coverage"
+        ]
 
     if cost_report.get("measured"):
-        metrics["avg_embedding_tokens_per_query"] = cost_report["summary"]["avg_embedding_tokens_per_query"]
-        metrics["avg_llm_tokens_in_per_query"] = cost_report["summary"]["avg_input_tokens_per_query"]
-        metrics["avg_llm_tokens_out_per_query"] = cost_report["summary"]["avg_output_tokens_per_query"]
+        metrics["avg_embedding_tokens_per_query"] = cost_report["summary"][
+            "avg_embedding_tokens_per_query"
+        ]
+        metrics["avg_llm_tokens_in_per_query"] = cost_report["summary"][
+            "avg_input_tokens_per_query"
+        ]
+        metrics["avg_llm_tokens_out_per_query"] = cost_report["summary"][
+            "avg_output_tokens_per_query"
+        ]
         metrics["avg_cost_per_query_usd"] = cost_report["summary"]["avg_cost_per_query_usd"]
         metrics["total_eval_cost_usd"] = cost_report["summary"]["total_cost_usd"]
 

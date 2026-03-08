@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
 import time
-import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -82,7 +82,9 @@ def _to_source_chunks(hits: list[Any]) -> list[SourceChunk]:
     ]
 
 
-def _serialize_retrieval_hits(hits: list[Any], max_snippet_chars: int = 160) -> list[dict[str, Any]]:
+def _serialize_retrieval_hits(
+    hits: list[Any], max_snippet_chars: int = 160
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for h in hits:
         out.append(
@@ -156,8 +158,7 @@ def query(
                 _record_refusal("retrieval backend error")
                 return QueryResponse(
                     answer=(
-                        "I cannot answer right now because retrieval is "
-                        "temporarily unavailable."
+                        "I cannot answer right now because retrieval is temporarily unavailable."
                     ),
                     confidence=0.0,
                     sources=[],
@@ -185,16 +186,13 @@ def query(
             )
             _record_refusal("retrieval backend error")
             return QueryResponse(
-                answer=(
-                    "I cannot answer right now because retrieval is temporarily unavailable."
-                ),
+                answer=("I cannot answer right now because retrieval is temporarily unavailable."),
                 confidence=0.0,
                 sources=[],
                 refusal=Refusal(
                     is_refusal=True,
                     reason=(
-                        "Retrieval backend error. Check model/API configuration and "
-                        "connectivity."
+                        "Retrieval backend error. Check model/API configuration and connectivity."
                     ),
                 ),
                 metrics={
@@ -209,13 +207,13 @@ def query(
         log.exception("query.generate_failed", error=str(e))
         REQUEST_ERRORS.labels(stage="generation").inc()
         latency_s = time.perf_counter() - start
-        total_cost = float(r.embedding_cost_usd)
+        generation_failure_total_cost = float(r.embedding_cost_usd)
         _record_usage_metrics(
             latency_s=latency_s,
             embedding_tokens=int(r.embedding_tokens),
             llm_in=None,
             llm_out=None,
-            total_cost=total_cost,
+            total_cost=generation_failure_total_cost,
         )
         _record_refusal("generation backend error")
         fallback_sources = _to_source_chunks(r.hits)
@@ -234,7 +232,7 @@ def query(
                 "llm_tokens_in": None,
                 "llm_tokens_out": None,
                 "llm_cost_usd": None,
-                "total_cost_usd": total_cost,
+                "total_cost_usd": generation_failure_total_cost,
                 "num_hits": len(r.hits),
                 "error": "generation_failed",
                 "latency_ms": round(latency_s * 1000.0, 2),
@@ -242,7 +240,7 @@ def query(
         )
 
     latency_s = time.perf_counter() - start
-    total_cost = (
+    total_cost: float | None = (
         float(r.embedding_cost_usd + float(g.llm_cost_usd or 0.0))
         if g.llm_cost_usd is not None
         else None

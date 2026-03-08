@@ -108,7 +108,7 @@ def test_build_resume_metrics_only_includes_measured_values() -> None:
                 "hybrid_rrf": {
                     "mrr": 0.2,
                     "summary_by_k": {"5": {"precision": 0.25, "recall": 0.45, "hit_rate": 0.7}},
-                }
+                },
             },
         },
         hallucination={
