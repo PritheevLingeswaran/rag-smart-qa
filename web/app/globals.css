@@ -3,31 +3,43 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
-  --bg-primary: #07111f;
-  --bg-secondary: #0d1728;
-  --bg-elevated: rgba(11, 20, 37, 0.8);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --text-primary: #f8fbff;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --accent: #22d3ee;
-  --accent-strong: #38bdf8;
-  --shadow-panel: 0 24px 80px rgba(2, 6, 23, 0.45);
+  color-scheme: light;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f7fa;
+  --bg-elevated: rgba(255, 255, 255, 0.9);
+  --surface-soft: rgba(245, 247, 250, 0.92);
+  --border-color: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --secondary: #6366f1;
+  --accent: #8b5cf6;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --shadow-panel: 0 24px 70px rgba(15, 23, 42, 0.08);
 }
 
-[data-theme="light"] {
-  color-scheme: light;
-  --bg-primary: #f4f7fb;
-  --bg-secondary: #eef3ff;
-  --bg-elevated: rgba(255, 255, 255, 0.82);
-  --panel-border: rgba(15, 23, 42, 0.08);
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-elevated: rgba(15, 23, 42, 0.82);
+  --surface-soft: rgba(30, 41, 59, 0.78);
+  --border-color: #334155;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
   --text-muted: #64748b;
-  --accent: #0f766e;
-  --accent-strong: #0284c7;
-  --shadow-panel: 0 28px 80px rgba(15, 23, 42, 0.12);
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --secondary: #6366f1;
+  --accent: #a78bfa;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --shadow-panel: 0 28px 80px rgba(2, 6, 23, 0.32);
 }
 
 html,
@@ -38,8 +50,8 @@ body {
 body {
   color: var(--text-primary);
   background:
-    radial-gradient(circle at top left, rgba(34, 211, 238, 0.18), transparent 24%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.15), transparent 30%),
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.11), transparent 24%),
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.1), transparent 30%),
     linear-gradient(180deg, var(--bg-primary), var(--bg-secondary));
   @apply antialiased;
   font-family: var(--font-sans), sans-serif;
@@ -50,33 +62,33 @@ body {
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.22);
+  background: rgba(59, 130, 246, 0.22);
 }
 
 .app-bg-grid {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--border-color) 34%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border-color) 34%, transparent) 1px, transparent 1px);
   background-size: 30px 30px;
 }
 
 .panel {
-  border: 1px solid var(--panel-border);
+  border: 1px solid var(--border-color);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-panel);
   @apply rounded-[30px] backdrop-blur-xl;
 }
 
 .panel-muted {
-  border: 1px solid color-mix(in srgb, var(--panel-border) 90%, transparent);
-  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 92%, transparent);
   @apply rounded-[24px];
 }
 
 .panel-glow {
   box-shadow:
-    0 30px 80px rgba(2, 6, 23, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 30px 80px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .panel-hover {
@@ -86,15 +98,8 @@ body {
 .panel-hover:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 35px 100px rgba(2, 6, 23, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-.text-gradient {
-  background: linear-gradient(135deg, #f8fbff 0%, #8be9ff 52%, #60a5fa 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+    0 35px 100px rgba(59, 130, 246, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .premium-ring {
@@ -107,11 +112,87 @@ body {
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.45), rgba(96, 165, 250, 0.12));
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.42), rgba(139, 92, 246, 0.18));
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+.premium-border {
+  position: relative;
+}
+
+.premium-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.18)) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+
+.section-eyebrow {
+  @apply text-[11px] font-semibold uppercase tracking-[0.26em];
+  color: var(--primary);
+}
+
+.section-title {
+  @apply mt-3 text-4xl font-semibold tracking-[-0.05em] md:text-5xl;
+  color: var(--text-primary);
+}
+
+.section-copy {
+  @apply mt-4 text-base leading-8;
+  color: var(--text-secondary);
+}
+
+.metric-label {
+  @apply text-[11px] font-semibold uppercase tracking-[0.24em];
+  color: var(--text-secondary);
+}
+
+.icon-chip {
+  @apply flex h-12 w-12 items-center justify-center rounded-2xl;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border-color));
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.12));
+  color: var(--primary);
+}
+
+.surface-card {
+  @apply rounded-[24px] border p-4 transition;
+  border-color: var(--border-color);
+  background: var(--surface-soft);
+}
+
+.surface-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.06);
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold text-white transition;
+  background: linear-gradient(135deg, #3b82f6, #6366f1, #8b5cf6);
+  box-shadow: 0 18px 38px rgba(59, 130, 246, 0.22);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-2xl border px-5 py-3 text-sm font-semibold transition;
+  border-color: var(--border-color);
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border-color));
+  color: var(--primary);
 }

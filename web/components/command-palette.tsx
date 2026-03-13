@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChatSession, DocumentItem } from "@/types/api";
 
 const baseItems = [
-  { href: "/", label: "Dashboard", description: "Overview, health, and quick actions", icon: Sparkles },
+  { href: "/workspace", label: "Dashboard", description: "Overview, health, and quick actions", icon: Sparkles },
   { href: "/chat", label: "Chat", description: "Ask grounded questions", icon: MessageSquareText },
   {
     href: "/knowledge-base",

@@ -10,12 +10,38 @@ import type {
   SummaryPayload
 } from "@/types/api";
 
+function authHeaders() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  const raw = window.localStorage.getItem("rag-smart-qa-auth-user");
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { userId?: string };
+    return parsed.userId ? { "x-user-id": parsed.userId } : {};
+  } catch {
+    return {};
+  }
+}
+
+function mergeHeaders(init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  Object.entries(authHeaders()).forEach(([key, value]) => {
+    if (value) {
+      headers.set(key, value);
+    }
+  });
+  return headers;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      ...(init?.headers ?? {})
-    },
+    headers: mergeHeaders(init),
     cache: "no-store"
   });
 
