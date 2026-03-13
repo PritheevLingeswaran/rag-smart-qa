@@ -14,3 +14,7 @@ data/processed/
 *.sqlite3
 .vscode/
 .idea/
+/.env.local
+/package-lock.json
+web/.next/
+web/node_modules/
