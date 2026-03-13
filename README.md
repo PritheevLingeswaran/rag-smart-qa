@@ -1,6 +1,6 @@
 # rag-smart-qa
 
-Config-driven FastAPI RAG system with strict grounding, hybrid retrieval (BM25 + dense), and reproducible evaluation.
+Config-driven FastAPI RAG system with strict grounding, hybrid retrieval (BM25 + dense), reproducible evaluation, and a full Next.js knowledge workspace for uploads, chat, citations, summaries, and document management.
 
 ## Core guarantees
 - Answers must be grounded in retrieved evidence.
@@ -8,14 +8,35 @@ Config-driven FastAPI RAG system with strict grounding, hybrid retrieval (BM25 +
 - If evidence quality is weak, system refuses: `Not available in the provided documents.`
 - Metrics are exposed via Prometheus and evaluation scripts.
 
+## Application architecture
+- `src/api/routes/`: modular FastAPI routers for uploads, documents, chat, summaries, health, settings, and legacy query endpoints.
+- `src/services/`: document lifecycle, SQLite metadata persistence, summary generation, storage abstraction, and chat session orchestration.
+- `web/`: Next.js 14 App Router frontend with Tailwind, React Query, dashboard, chat, knowledge base, summaries, and settings pages.
+- `data/raw/documents/uploads/`: local-first file storage abstraction ready to be swapped for object storage later.
+- `data/processed/metadata/app.db`: SQLite metadata for documents, chat sessions/messages, citations, and cached summaries.
+
 ## API endpoints
 - `GET /healthz`
+- `GET /health`
 - `POST /query`
 - `GET /metrics`
 - `GET /stats` (docs/chunks/vectors + active index paths)
 - `POST /retrieve/bm25` (baseline sparse retrieval)
 - `POST /retrieve/hybrid` (hybrid retrieval only)
 - `POST /debug/retrieval` (stage-wise scores/counts; enable via config/env)
+- `POST /api/upload`
+- `GET /api/documents`
+- `GET /api/documents/{id}`
+- `DELETE /api/documents/{id}`
+- `POST /api/documents/{id}/reindex`
+- `GET /api/documents/{id}/summary`
+- `POST /api/chat/query`
+- `GET /api/chat/sessions`
+- `GET /api/chat/sessions/{id}`
+- `DELETE /api/chat/sessions/{id}`
+- `GET /api/citations/{citation_id}`
+- `GET /api/settings`
+- `GET /readiness`
 
 ## Setup
 ```bash
@@ -34,6 +55,44 @@ PYTHONPATH=src python -m scripts.run_api
 ```
 
 Open Swagger: `http://127.0.0.1:8000/docs`
+
+## Run the full web app
+```bash
+cp .env.example .env
+cp web/.env.example web/.env.local
+
+make api
+# in another terminal
+make web
+```
+
+Frontend: `http://127.0.0.1:3000`
+
+## Docker compose
+```bash
+docker compose up --build
+```
+
+This starts:
+- FastAPI API on `http://127.0.0.1:8000`
+- Next.js web app on `http://127.0.0.1:3000`
+
+## Upload, indexing, and citations flow
+1. Files are uploaded through `POST /api/upload` and stored locally under `data/raw/documents/uploads/<user>/`.
+2. Document metadata is persisted to SQLite immediately with `queued` indexing state.
+3. A background rebuild regenerates chunks, BM25, vector embeddings, and per-document summary cache.
+4. Chat responses persist the session, assistant message, and citation records.
+5. Clicking a citation in the web app opens the cited excerpt and links back to the document detail page.
+
+## Auth and storage notes
+- Auth is feature-flagged in backend settings and intentionally abstracted behind `AuthService`.
+- In single-user mode the app uses `local-user`; when auth is enabled, pass the configured user header until a Clerk/Firebase adapter is wired.
+- File storage is local-first through `StorageService`; the API surface is ready for a future S3/GCS implementation.
+
+## Known limitations
+- PDF source highlighting is excerpt-based today; the document viewer focuses on cited chunk text and page number instead of byte-perfect PDF offsets.
+- Upload indexing currently rebuilds the canonical corpus to keep BM25 and FAISS/Chroma consistent across providers.
+- Frontend build/test commands require Node.js and npm to be installed locally.
 
 ## Quick verification
 ```bash

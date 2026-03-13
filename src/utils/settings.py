@@ -8,16 +8,21 @@ from pydantic import BaseModel, Field
 class PathsConfig(BaseModel):
     data_dir: str = "data"
     raw_dir: str = "data/raw/documents"
+    uploads_dir: str = "data/raw/documents/uploads"
     processed_dir: str = "data/processed"
     chunks_dir: str = "data/processed/chunks"
     metadata_dir: str = "data/processed/metadata"
     indexes_dir: str = "data/processed/indexes"
+    app_db_path: str = "data/processed/metadata/app.db"
 
 
 class IngestionConfig(BaseModel):
-    supported_extensions: list[str] = Field(default_factory=lambda: [".pdf", ".txt", ".md"])
+    supported_extensions: list[str] = Field(
+        default_factory=lambda: [".pdf", ".txt", ".md", ".html", ".htm"]
+    )
     deduplicate_documents: bool = True
     max_document_chars: int = 500_000
+    max_upload_size_mb: int = 25
 
 
 class BM25Config(BaseModel):
@@ -169,9 +174,31 @@ class APIConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     reload: bool = True
-    cors: CorsConfig = Field(default_factory=CorsConfig)
+    cors: CorsConfig = Field(
+        default_factory=lambda: CorsConfig(
+            allow_origins=["*", "http://localhost:3000", "http://127.0.0.1:3000"]
+        )
+    )
     enable_debug_retrieval_endpoint: bool = False
     request_timeout_s: float = 60.0
+
+
+class SummaryConfig(BaseModel):
+    enabled: bool = True
+    model: str | None = None
+    max_context_chars: int = 18000
+    max_points: int = 5
+
+
+class StorageConfig(BaseModel):
+    provider: Literal["local"] = "local"
+
+
+class AuthConfig(BaseModel):
+    enabled: bool = False
+    provider: Literal["none", "clerk", "firebase", "header"] = "none"
+    header_user_id: str = "x-user-id"
+    demo_user_id: str = "local-user"
 
 
 class PrometheusConfig(BaseModel):
@@ -221,6 +248,9 @@ class Settings(BaseModel):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
     api: APIConfig = Field(default_factory=APIConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
+    summaries: SummaryConfig = Field(default_factory=SummaryConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     load_test: LoadTestConfig = Field(default_factory=LoadTestConfig)

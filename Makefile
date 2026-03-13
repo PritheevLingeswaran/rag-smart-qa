@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 QUALITY_PATHS := src tests evaluation/resume_metrics.py
 
-.PHONY: install fmt lint typecheck test run ingest index eval loadtest all docker-build docker-up docker-down stats eval-retrieval eval-grounding stability-60m
+.PHONY: install fmt lint typecheck test test-web run api web dev ingest index eval loadtest all docker-build docker-up docker-down stats eval-retrieval eval-grounding stability-60m
 
 install:
 	python -m pip install -U pip
@@ -21,8 +21,20 @@ typecheck:
 test:
 	PYTHONPATH=src pytest -q
 
+test-web:
+	cd web && npm install && npm run test
+
 run:
 	PYTHONPATH=src python -m scripts.run_api
+
+api:
+	PYTHONPATH=src python -m scripts.run_api
+
+web:
+	cd web && npm install && npm run dev
+
+dev:
+	docker compose up --build
 
 ingest:
 	PYTHONPATH=src python -m scripts.ingest_data

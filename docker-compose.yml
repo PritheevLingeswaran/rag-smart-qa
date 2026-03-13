@@ -10,3 +10,14 @@ services:
       - ./data:/app/data
       - ./configs:/app/configs
       - ./prompts:/app/prompts
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: rag-smart-qa-web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api

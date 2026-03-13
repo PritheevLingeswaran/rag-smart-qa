@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from pypdf import PdfReader
 
@@ -32,6 +33,16 @@ def load_txt(path: Path) -> list[Page]:
     except Exception as exc:
         raise RuntimeError(f"Failed to read text file '{path}': {exc}") from exc
     return [Page(source=str(path), page=1, text=txt)]
+
+
+def load_html(path: Path) -> list[Page]:
+    try:
+        html = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception as exc:
+        raise RuntimeError(f"Failed to read HTML file '{path}': {exc}") from exc
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text).strip()
+    return [Page(source=str(path), page=1, text=text)]
 
 
 def iter_documents(raw_dir: str, exts: list[str]) -> Iterator[Path]:

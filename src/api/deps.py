@@ -3,6 +3,8 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from fastapi import Depends, Header
+
 from generation.answerer import Answerer
 from retrieval.retriever import Retriever
 from retrieval.vector_store import (
@@ -11,6 +13,12 @@ from retrieval.vector_store import (
     VectorStore,
     build_vector_store,
 )
+from services.auth_service import AuthService
+from services.chat_service import ChatService
+from services.document_service import DocumentService
+from services.metadata_service import MetadataService
+from services.storage_service import LocalStorageService, StorageService
+from services.summary_service import SummaryService
 from utils.config import ensure_dirs, load_settings
 from utils.logging import configure_logging
 from utils.settings import Settings
@@ -84,3 +92,45 @@ def get_retriever() -> Retriever:
 @lru_cache(maxsize=1)
 def get_answerer() -> Answerer:
     return Answerer(get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_metadata_service() -> MetadataService:
+    return MetadataService(get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_storage_service() -> StorageService:
+    return LocalStorageService(get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_summary_service() -> SummaryService:
+    return SummaryService(get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_document_service() -> DocumentService:
+    return DocumentService(
+        get_settings(),
+        get_metadata_service(),
+        get_storage_service(),
+        get_summary_service(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_chat_service() -> ChatService:
+    return ChatService(get_settings(), get_metadata_service(), get_document_service())
+
+
+@lru_cache(maxsize=1)
+def get_auth_service() -> AuthService:
+    return AuthService(get_settings())
+
+
+def get_current_user_id(
+    x_user_id: str | None = Header(default=None, alias="x-user-id"),
+    auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+) -> str:
+    return auth_service.resolve_user_id(x_user_id)

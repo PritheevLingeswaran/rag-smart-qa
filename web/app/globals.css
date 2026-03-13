@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-canvas text-ink antialiased;
+  background-image: radial-gradient(circle at top, rgba(15, 118, 110, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98), #eef4ff);
+}
+
+* {
+  scrollbar-width: thin;
+}
+
+.panel {
+  @apply rounded-3xl border border-slate-200/80 bg-white/80 shadow-panel backdrop-blur;
+}
+
+.panel-muted {
+  @apply rounded-2xl border border-slate-200/70 bg-slate-50/90;
+}

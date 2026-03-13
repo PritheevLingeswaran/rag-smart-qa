@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import cast
 
-from ingestion.loaders import Page, iter_documents, load_pdf, load_txt
+from ingestion.loaders import Page, iter_documents, load_html, load_pdf, load_txt
 from preprocessing.pipeline import preprocess_pages_to_chunks
 from utils.hash import sha256_text
 from utils.logging import get_logger
@@ -39,6 +39,8 @@ def _pages_from_path(path: Path) -> list[Page]:
         return cast(list[Page], load_pdf(path))
     if path.suffix.lower() in {".txt", ".md"}:
         return cast(list[Page], load_txt(path))
+    if path.suffix.lower() in {".html", ".htm"}:
+        return cast(list[Page], load_html(path))
     raise ValueError(f"Unsupported file type: {path.suffix}")
 
 

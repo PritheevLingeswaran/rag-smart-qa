@@ -60,6 +60,7 @@ def load_settings() -> Settings:
 def ensure_dirs(settings: Settings) -> None:
     for p in [
         settings.paths.raw_dir,
+        settings.paths.uploads_dir,
         settings.paths.processed_dir,
         settings.paths.chunks_dir,
         settings.paths.metadata_dir,

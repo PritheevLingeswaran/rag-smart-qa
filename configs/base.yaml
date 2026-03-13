@@ -5,15 +5,18 @@ app:
 paths:
   data_dir: data
   raw_dir: data/raw/documents
+  uploads_dir: data/raw/documents/uploads
   processed_dir: data/processed
   chunks_dir: data/processed/chunks
   metadata_dir: data/processed/metadata
   indexes_dir: data/processed/indexes
+  app_db_path: data/processed/metadata/app.db
 
 ingestion:
-  supported_extensions: [".pdf", ".txt", ".md"]
+  supported_extensions: [".pdf", ".txt", ".md", ".html", ".htm"]
   deduplicate_documents: true
   max_document_chars: 500000
+  max_upload_size_mb: 25
 
 preprocessing:
   cleaning:
@@ -114,6 +117,21 @@ api:
   reload: true
   enable_debug_retrieval_endpoint: false
   request_timeout_s: 60
+
+storage:
+  provider: local
+
+summaries:
+  enabled: true
+  model: gpt-4o-mini
+  max_context_chars: 18000
+  max_points: 5
+
+auth:
+  enabled: false
+  provider: none
+  header_user_id: x-user-id
+  demo_user_id: local-user
 
 monitoring:
   prometheus:
