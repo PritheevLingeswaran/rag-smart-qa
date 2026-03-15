@@ -6,6 +6,7 @@ from typing import Any, cast
 from generation.answerer import Answerer
 from monitoring.query_metrics import (
     record_error,
+    record_fallback,
     record_grounded,
     record_refusal,
     record_retrieval_scores,
@@ -13,7 +14,11 @@ from monitoring.query_metrics import (
 )
 from services.document_service import DocumentService
 from services.metadata_service import MetadataService
+from utils.logging import get_logger
 from utils.settings import Settings
+from utils.timeout import StageTimeoutError, run_with_timeout
+
+log = get_logger(__name__)
 
 
 class ChatService:
@@ -46,23 +51,71 @@ class ChatService:
         total_started = time.perf_counter()
         retrieval_started = time.perf_counter()
         try:
-            retrieval_output = retriever.retrieve(
-                question=question,
-                top_k=top_k,
-                rewrite_override=False,
-                mode_override=retrieval_mode_override,
+            retrieval_output = run_with_timeout(
+                "retrieval",
+                float(self.settings.api.retrieval_timeout_s),
+                lambda: retriever.retrieve(
+                    question=question,
+                    top_k=top_k,
+                    rewrite_override=False,
+                    mode_override=retrieval_mode_override,
+                ),
             )
-        except Exception:
+        except StageTimeoutError as exc:
+            record_error("chat_retrieval_timeout")
+            record_fallback("chat_retrieval_timeout")
+            log.warning(
+                "chat.query.retrieval_timeout", error=str(exc), retrieval_mode=retrieval_mode
+            )
+            return self._degraded_response(
+                session_id=cast(str, session["id"]),
+                answer="I cannot answer right now because retrieval timed out.",
+                reason="Retrieval timed out before evidence could be gathered.",
+                total_latency_s=time.perf_counter() - total_started,
+            )
+        except Exception as exc:
             record_error("chat_retrieval")
-            raise
+            record_fallback("chat_retrieval_error")
+            log.exception(
+                "chat.query.retrieval_failed", error=str(exc), retrieval_mode=retrieval_mode
+            )
+            return self._degraded_response(
+                session_id=cast(str, session["id"]),
+                answer="I cannot answer right now because retrieval is temporarily unavailable.",
+                reason="Retrieval backend error.",
+                total_latency_s=time.perf_counter() - total_started,
+            )
         retrieval_latency_s = time.perf_counter() - retrieval_started
         answerer = Answerer(retriever.settings)
         generation_started = time.perf_counter()
         try:
-            generation = answerer.generate(question, retrieval_output.hits)
-        except Exception:
+            generation = run_with_timeout(
+                "generation",
+                float(self.settings.api.generation_timeout_s),
+                lambda: answerer.generate(question, retrieval_output.hits),
+            )
+        except StageTimeoutError as exc:
+            record_error("chat_generation_timeout")
+            record_fallback("chat_generation_timeout")
+            log.warning("chat.query.generation_timeout", error=str(exc))
+            return self._degraded_response(
+                session_id=cast(str, session["id"]),
+                answer="I found relevant evidence, but answer generation timed out.",
+                reason="Generation timed out.",
+                total_latency_s=time.perf_counter() - total_started,
+                retrieval_output=retrieval_output,
+            )
+        except Exception as exc:
             record_error("chat_generation")
-            raise
+            record_fallback("chat_generation_error")
+            log.exception("chat.query.generation_failed", error=str(exc))
+            return self._degraded_response(
+                session_id=cast(str, session["id"]),
+                answer="I found relevant evidence, but answer generation is temporarily unavailable.",
+                reason="Generation backend error.",
+                total_latency_s=time.perf_counter() - total_started,
+                retrieval_output=retrieval_output,
+            )
         generation_latency_s = time.perf_counter() - generation_started
         total_latency_s = time.perf_counter() - total_started
         total_cost = (
@@ -79,10 +132,13 @@ class ChatService:
             llm_out=generation.llm_tokens_out,
             total_cost=total_cost,
             route="/api/v1/chat/query",
+            rerank_latency_s=self._rerank_latency_s(retrieval_output.debug),
         )
         record_retrieval_scores(generation.sources)
         if generation.refusal.is_refusal:
             record_refusal(generation.refusal.reason)
+        if not generation.sources and retrieval_output.hits:
+            record_fallback("citation_missing_source")
         record_grounded(generation.answer, generation.sources, generation.refusal.is_refusal)
 
         assistant_message = self.metadata.add_message(
@@ -108,20 +164,24 @@ class ChatService:
             },
         )
 
-        citations = self.metadata.add_citations(
-            assistant_message["id"],
-            [
-                {
-                    "document_id": self._document_id_for_source(hit.source, owner_id),
-                    "chunk_id": hit.chunk_id,
-                    "source": hit.source,
-                    "page": hit.page,
-                    "excerpt": hit.text[:800],
-                    "score": hit.score,
-                }
-                for hit in generation.sources
-            ],
-        )
+        citations_payload = [
+            {
+                "document_id": self._document_id_for_source(hit.source, owner_id),
+                "chunk_id": hit.chunk_id,
+                "source": hit.source,
+                "page": hit.page,
+                "excerpt": hit.text[:800],
+                "score": hit.score,
+            }
+            for hit in generation.sources
+        ]
+        try:
+            citations = self.metadata.add_citations(assistant_message["id"], citations_payload)
+        except Exception as exc:
+            record_error("chat_citations")
+            record_fallback("citation_persist_failed")
+            log.exception("chat.query.citation_persist_failed", error=str(exc))
+            citations = []
 
         return {
             "session_id": session["id"],
@@ -146,6 +206,7 @@ class ChatService:
                 "total_latency_ms": round(total_latency_s * 1000.0, 2),
                 "retrieval_latency_ms": round(retrieval_latency_s * 1000.0, 2),
                 "generation_latency_ms": round(generation_latency_s * 1000.0, 2),
+                "rerank_latency_ms": self._rerank_latency_ms(retrieval_output.debug),
                 "embedding_tokens": retrieval_output.embedding_tokens,
                 "embedding_cost_usd": retrieval_output.embedding_cost_usd,
                 "llm_tokens_in": generation.llm_tokens_in,
@@ -171,3 +232,70 @@ class ChatService:
         if document is None or document["owner_id"] != owner_id:
             return None
         return cast(str, document["id"])
+
+    @staticmethod
+    def _rerank_latency_ms(debug: dict[str, Any] | None) -> float | None:
+        if not debug:
+            return None
+        timings = cast(dict[str, Any], debug.get("timings_ms") or {})
+        value = timings.get("rerank")
+        return float(value) if value is not None else None
+
+    @classmethod
+    def _rerank_latency_s(cls, debug: dict[str, Any] | None) -> float | None:
+        value = cls._rerank_latency_ms(debug)
+        return (value / 1000.0) if value is not None else None
+
+    def _degraded_response(
+        self,
+        *,
+        session_id: str,
+        answer: str,
+        reason: str,
+        total_latency_s: float,
+        retrieval_output: Any | None = None,
+    ) -> dict[str, Any]:
+        self.metadata.add_message(
+            session_id,
+            role="assistant",
+            content=answer,
+            confidence=0.0,
+            refusal=True,
+            latency_ms=round(total_latency_s * 1000.0, 2),
+            metadata={"degraded": True, "reason": reason},
+        )
+        record_refusal(reason)
+        if retrieval_output is not None:
+            sources = [
+                {
+                    "chunk_id": source.chunk.chunk_id,
+                    "source": source.chunk.source,
+                    "page": source.chunk.page,
+                    "score": source.score,
+                    "text": source.chunk.text,
+                }
+                for source in retrieval_output.hits
+            ]
+        else:
+            sources = []
+        return {
+            "session_id": session_id,
+            "answer": answer,
+            "confidence": 0.0,
+            "refusal": {"is_refusal": True, "reason": reason},
+            "citations": [],
+            "sources": sources,
+            "timing": {
+                "total_latency_ms": round(total_latency_s * 1000.0, 2),
+                "retrieval_latency_ms": None,
+                "generation_latency_ms": None,
+                "rerank_latency_ms": self._rerank_latency_ms(
+                    getattr(retrieval_output, "debug", None)
+                ),
+                "embedding_tokens": getattr(retrieval_output, "embedding_tokens", None),
+                "embedding_cost_usd": getattr(retrieval_output, "embedding_cost_usd", None),
+                "llm_tokens_in": None,
+                "llm_tokens_out": None,
+                "llm_cost_usd": None,
+            },
+        }

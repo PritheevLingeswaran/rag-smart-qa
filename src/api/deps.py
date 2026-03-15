@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import cast
 
-from fastapi import Depends, Header
+from fastapi import Depends, Request
 
 from generation.answerer import Answerer
 from retrieval.retriever import Retriever
@@ -131,7 +131,9 @@ def get_auth_service() -> AuthService:
 
 
 def get_current_user_id(
-    x_user_id: str | None = Header(default=None, alias="x-user-id"),
+    request: Request,
     auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
 ) -> str:
-    return cast(str, auth_service.resolve_user_id(x_user_id))
+    settings = get_settings()
+    header_value = request.headers.get(settings.auth.header_user_id)
+    return cast(str, auth_service.resolve_user_id(header_value))

@@ -4,15 +4,19 @@
 
 - Structured error responses avoid leaking raw tracebacks to clients.
 - Strict grounding and refusal logic reduce unsupported answer risk.
-- Auth remains feature-flagged and abstracted behind `AuthService`.
+- API key authentication is available through `x-api-key` when `auth.enabled=true`.
+- Header-based user identity is still supported for local/demo reviewer flows.
+- In-memory rate limiting protects API routes per IP or user/IP key.
+- CORS is driven from configured origins instead of unconditional wildcard defaults.
 - Health/readiness checks make startup failures explicit instead of silent.
 
-## Production hardening still recommended
+## Failure handling
 
-- Use a secrets manager instead of long-lived `.env` files.
-- Add real authentication, rate limiting, and tenant-aware document ACL enforcement.
-- Add stronger prompt-injection and abuse defenses around hostile uploaded content.
-- Replace local storage and SQLite if the deployment requires stronger durability or tenancy guarantees.
+- Empty retrieval results produce grounded refusals instead of fabricated answers.
+- Whitespace-only queries and invalid payloads return structured `422` validation responses.
+- Retrieval and generation stages have request-scoped timeout guards with degraded fallback responses.
+- Citation persistence failures are logged and downgraded instead of crashing the request.
+- Downstream retrieval/generation failures are counted in Prometheus and logged with request IDs.
 
 ## Monitoring
 
@@ -31,9 +35,19 @@ Tracked metrics include:
 - retrieval score diagnostics
 - request-stage errors
 - refusals
+- fallback/degraded responses
+- auth failures
+- rate-limit rejections
 - grounded vs non-grounded answers
 - token usage
 - cost usage when available
+
+## Production hardening still recommended
+
+- Use a secrets manager instead of long-lived `.env` files.
+- Replace local storage and SQLite if the deployment requires stronger durability or tenancy guarantees.
+- Add stronger prompt-injection and content-scanning defenses around hostile uploads.
+- Move from in-memory rate limiting to a shared store if you need multi-instance enforcement.
 
 ## What is intentionally not claimed
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PathsConfig(BaseModel):
@@ -167,7 +167,14 @@ class GenerationConfig(BaseModel):
 
 
 class CorsConfig(BaseModel):
-    allow_origins: list[str] = Field(default_factory=lambda: ["*"])
+    allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+
+    @field_validator("allow_origins", mode="before")
+    @classmethod
+    def _normalize_allow_origins(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 class APIConfig(BaseModel):
@@ -181,6 +188,28 @@ class APIConfig(BaseModel):
     )
     enable_debug_retrieval_endpoint: bool = False
     request_timeout_s: float = 60.0
+    retrieval_timeout_s: float = 15.0
+    generation_timeout_s: float = 30.0
+    max_query_length: int = 4000
+    max_upload_files: int = 10
+
+
+class RateLimitConfig(BaseModel):
+    enabled: bool = True
+    requests_per_minute: int = 60
+    burst: int = 10
+    key_strategy: Literal["ip", "user_or_ip"] = "user_or_ip"
+    exempt_paths: list[str] = Field(
+        default_factory=lambda: [
+            "/health",
+            "/healthz",
+            "/readyz",
+            "/readiness",
+            "/api/v1/readiness",
+            "/metrics",
+            "/api/v1/metrics",
+        ]
+    )
 
 
 class SummaryConfig(BaseModel):
@@ -196,9 +225,29 @@ class StorageConfig(BaseModel):
 
 class AuthConfig(BaseModel):
     enabled: bool = False
-    provider: Literal["none", "clerk", "firebase", "header"] = "none"
+    provider: Literal["none", "clerk", "firebase", "header", "api_key"] = "none"
     header_user_id: str = "x-user-id"
+    api_key_header: str = "x-api-key"
+    api_keys: list[str] = Field(default_factory=list)
     demo_user_id: str = "local-user"
+    exempt_paths: list[str] = Field(
+        default_factory=lambda: [
+            "/health",
+            "/healthz",
+            "/readyz",
+            "/readiness",
+            "/api/v1/readiness",
+            "/metrics",
+            "/api/v1/metrics",
+        ]
+    )
+
+    @field_validator("api_keys", mode="before")
+    @classmethod
+    def _normalize_api_keys(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 class PrometheusConfig(BaseModel):
@@ -208,6 +257,7 @@ class PrometheusConfig(BaseModel):
 
 class MonitoringConfig(BaseModel):
     prometheus: PrometheusConfig = Field(default_factory=PrometheusConfig)
+    rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
 
 
 class EvaluationConfig(BaseModel):

@@ -25,6 +25,12 @@ GENERATION_LATENCY = Histogram(
     ["route"],
     buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
 )
+RERANK_LATENCY = Histogram(
+    "rag_rerank_latency_seconds",
+    "Latency of the reranking stage",
+    ["route"],
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2),
+)
 REQUEST_COST_USD = Counter("rag_request_cost_usd_total", "Total USD cost across requests")
 REQUEST_TOKENS = Counter("rag_request_tokens_total", "Total tokens used across requests", ["kind"])
 REQUEST_COUNT = Counter(
@@ -56,4 +62,19 @@ RETRIEVAL_TOP_GAP = Histogram(
     "rag_retrieval_top_gap",
     "Score gap between top-1 and top-2 retrieval hits",
     buckets=(0.0, 0.01, 0.03, 0.05, 0.08, 0.12, 0.2, 0.4, 1.0),
+)
+REQUEST_FALLBACKS = Counter(
+    "rag_fallback_responses_total",
+    "Total degraded or fallback responses emitted by the application",
+    ["stage"],
+)
+AUTH_FAILURES = Counter(
+    "rag_auth_failures_total",
+    "Total authentication failures by reason",
+    ["reason"],
+)
+RATE_LIMIT_REJECTIONS = Counter(
+    "rag_rate_limit_rejections_total",
+    "Total requests rejected by in-memory rate limiting",
+    ["path"],
 )

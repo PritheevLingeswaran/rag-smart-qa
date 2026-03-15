@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from schemas.api_common import SourceCitation
 from schemas.response import Refusal
@@ -24,6 +24,14 @@ class ChatQueryRequest(BaseModel):
     ] = "hybrid_rrf"
     top_k: int = Field(default=8, ge=1, le=25)
 
+    @field_validator("question")
+    @classmethod
+    def _validate_question(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Question must not be empty or whitespace only.")
+        return normalized
+
 
 class ChatResponseSource(BaseModel):
     chunk_id: str
@@ -36,6 +44,7 @@ class ChatResponseSource(BaseModel):
 class ChatTiming(BaseModel):
     total_latency_ms: float | None = None
     retrieval_latency_ms: float | None = None
+    rerank_latency_ms: float | None = None
     generation_latency_ms: float | None = None
     embedding_tokens: int | None = None
     embedding_cost_usd: float | None = None

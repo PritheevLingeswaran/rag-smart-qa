@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -263,6 +264,7 @@ class Retriever:
             "stage_counts": {},
             "top_scores": {},
             "top_ids": {},
+            "timings_ms": {},
         }
         log.info(
             "retrieval.query_rewrite",
@@ -272,9 +274,11 @@ class Retriever:
         )
 
         if mode == "bm25":
+            bm25_started = time.perf_counter()
             hits = self._bm25_only_hits(
                 query, top_k=int(top_k), filter_source_substr=filter_source_substr
             )
+            debug["timings_ms"]["bm25"] = round((time.perf_counter() - bm25_started) * 1000.0, 2)
             hits, threshold_applied = self._apply_min_score_cutoff(
                 hits, float(self.settings.retrieval.min_score)
             )
@@ -311,6 +315,7 @@ class Retriever:
 
         # Dense retrieval always happens (we need embeddings anyway to answer). We can still reduce
         # dense candidates in hybrid if you want, but in practice a slightly larger dense_k improves stability.
+        dense_started = time.perf_counter()
         emb = self.embedder.embed_query(query)
         q_vec = emb.vectors[0]
 
@@ -319,6 +324,7 @@ class Retriever:
         dense_hits = self.store.search(
             q_vec, top_k=dense_k, filter_source_substr=filter_source_substr
         )
+        debug["timings_ms"]["dense"] = round((time.perf_counter() - dense_started) * 1000.0, 2)
         dense_top_scores = [
             round(float(h.score), 6) for h in dense_hits[: self.settings.retrieval.debug_top_n]
         ]
@@ -347,12 +353,14 @@ class Retriever:
                 return c is not None and filter_source_substr in c.source
 
             sparse_k = int(self.settings.retrieval.hybrid.bm25_k)
+            sparse_started = time.perf_counter()
             sparse_hits = bm25.query(query, top_k=max(int(top_k), sparse_k), filter_fn=_filter_fn)
             sparse_hits = [
                 hit
                 for hit in sparse_hits
                 if float(hit.score) >= float(self.settings.retrieval.hybrid.min_sparse_score)
             ]
+            debug["timings_ms"]["bm25"] = round((time.perf_counter() - sparse_started) * 1000.0, 2)
             sparse_norm = _normalize_bm25(sparse_hits)
             sparse_top_scores = [
                 round(float(sparse_norm.get(h.chunk_id, 0.0)), 6)
@@ -366,11 +374,15 @@ class Retriever:
                 top_scores=sparse_top_scores,
             )
 
+            fusion_started = time.perf_counter()
             hits, fusion_debug = self._fuse_dense_and_sparse(
                 dense_hits=dense_hits,
                 sparse_hits=sparse_hits,
                 chunk_by_id=chunk_by_id,
                 top_k=top_k,
+            )
+            debug["timings_ms"]["fusion"] = round(
+                (time.perf_counter() - fusion_started) * 1000.0, 2
             )
             fusion_top_scores = [
                 round(float(h.score), 6) for h in hits[: self.settings.retrieval.debug_top_n]
@@ -395,12 +407,16 @@ class Retriever:
 
         # Optional reranker runs *after* fusion (so it can improve precision of the hybrid union).
         if self.settings.retrieval.rerank.enabled and hits:
+            rerank_started = time.perf_counter()
             rr = build_reranker_from_config(self.settings.retrieval.rerank)
             reranked = rr.rerank(
                 query,
                 [h.chunk.text for h in hits],
                 base_scores=[float(h.score) for h in hits],
                 top_k=top_k,
+            )
+            debug["timings_ms"]["rerank"] = round(
+                (time.perf_counter() - rerank_started) * 1000.0, 2
             )
             hits = [
                 SearchHit(chunk=hits[r.idx].chunk, score=min(1.0, max(0.0, float(r.score))))

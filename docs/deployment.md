@@ -41,14 +41,21 @@ make web
 
 This repo maps cleanly to a simple Render deployment split:
 
+Blueprint file:
+
+- [render.yaml](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/render.yaml)
+
 ### API service
 
 - Type: Web Service
 - Runtime: Docker
 - Root directory: repository root
 - Dockerfile: `Dockerfile`
+- Blueprint service name: `rag-smart-qa-api`
 - Env vars:
   - `RAG_ENV=prod`
+  - `RAG_API_KEYS=<comma-separated-api-keys>` to enable API-key protection
+  - `API_CORS_ORIGINS=https://<your-web-host>`
   - `OPENAI_API_KEY` only if hosted generation is desired
   - any provider-specific keys if enabled
 
@@ -66,8 +73,25 @@ Persistent disk recommendation:
 - Runtime: Docker
 - Root directory: `web/`
 - Dockerfile: `web/Dockerfile`
+- Blueprint service name: `rag-smart-qa-web`
 - Env vars:
-  - `NEXT_PUBLIC_API_BASE_URL=https://<your-api-host>`
+  - `NEXT_PUBLIC_API_BASE_URL=<Render API host or full URL>`
+
+Deployment note:
+
+- The web app normalizes a bare Render host into `https://...`, so the blueprint can reference the API service host directly.
+
+## Render deploy steps
+
+1. Push the repository to GitHub.
+2. In Render, create a new Blueprint and point it at this repository.
+3. Review the generated services from `render.yaml`.
+4. Set secret env vars:
+   - `RAG_API_KEYS`
+   - `API_CORS_ORIGINS`
+   - `OPENAI_API_KEY` if using hosted generation
+5. Create the persistent disk for `/app/data` on the API service.
+6. Deploy the blueprint and wait for `/readyz` to pass.
 
 ## Production environment examples
 

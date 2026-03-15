@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -62,7 +63,7 @@ async def validation_exception_handler(
         status_code=422,
         code="validation_error",
         message="Request validation failed.",
-        details={"errors": exc.errors()},
+        details={"errors": jsonable_encoder(exc.errors())},
     )
 
 

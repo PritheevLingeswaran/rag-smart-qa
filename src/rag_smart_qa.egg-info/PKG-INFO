@@ -3,28 +3,7 @@ Name: rag-smart-qa
 Version: 0.1.0
 Summary: Production-grade, strict-grounding RAG system
 Author: rag-smart-qa contributors
-License: MIT License
-        
-        Copyright (c) 2026
-        
-        Permission is hereby granted, free of charge, to any person obtaining a copy
-        of this software and associated documentation files (the "Software"), to deal
-        in the Software without restriction, including without limitation the rights
-        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-        copies of the Software, and to permit persons to whom the Software is
-        furnished to do so, subject to the following conditions:
-        
-        The above copyright notice and this permission notice shall be included in all
-        copies or substantial portions of the Software.
-        
-        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-        SOFTWARE.
-        
+License-Expression: MIT
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
@@ -41,6 +20,7 @@ Production-style full-stack RAG system with strict grounding, hybrid retrieval, 
 - Container-ready backend and frontend with health checks, non-root runtime users, and Docker Compose wiring.
 - CI runs backend lint/type/test, frontend test/build, and Docker image builds from a clean checkout.
 - Structured logging, request IDs, correlation IDs, and Prometheus metrics for HTTP, retrieval, generation, errors, refusals, and token/cost usage.
+- API key auth, per-client rate limiting, timeout guards, and degraded fallback handling for reviewer-safe production demos.
 - Reproducible evaluation and load-test artifacts saved under `experiments/metrics/`.
 
 ## Architecture
@@ -96,6 +76,20 @@ Contract examples: [docs/api_contract.md](/Users/thamaraiselvang/Pritheev%20Proj
 - Backend coverage is emitted to `coverage.xml`.
 - Frontend coverage is emitted under `web/coverage/`.
 
+### Reproduce CI locally
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r requirements.txt
+pip install -e .
+ruff check src tests evaluation/resume_metrics.py
+mypy src tests evaluation/resume_metrics.py
+RAG_SKIP_STARTUP_VALIDATION=1 OPENAI_API_KEY=test OPENAI_BASE_URL=http://localhost:9999/v1 OPENAI_ORG='' pytest --cov=src --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -q
+cd web && npm ci && npm run test:coverage && NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000 npm run build
+```
+
 What is covered in-repo now:
 
 - Retrieval fusion and score-threshold behavior.
@@ -147,8 +141,17 @@ docker compose up --build
 
 ### Cloud target
 
-The repo now documents a concrete Render deployment path for the API and web app:
+The repo now includes a concrete Render blueprint for the API and web app:
+[render.yaml](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/render.yaml)
+
+Render setup details:
 [docs/deployment.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/deployment.md)
+
+Deployment env vars:
+
+- `RAG_API_KEYS` for backend API-key protection
+- `API_CORS_ORIGINS` for allowed frontend origins
+- `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_ORG` when hosted model access is enabled
 
 ## Monitoring
 
@@ -159,12 +162,33 @@ The repo now documents a concrete Render deployment path for the API and web app
   - request count
   - HTTP latency
   - retrieval latency
+  - rerank latency
   - generation latency
   - retrieval score diagnostics
   - request errors
   - refusals
+  - fallback/degraded responses
+  - auth failures
+  - rate-limit rejections
   - token usage
   - cost usage when available
+
+Example structured log fields:
+
+- `request_id`
+- `correlation_id`
+- `path`
+- `elapsed_s`
+- retrieval stage top scores
+- fallback reason for degraded responses
+
+## Failure handling and API security
+
+- Whitespace-only or malformed queries are rejected with structured `422` responses.
+- Retrieval and generation have timeout guards and return safe refusal/degraded responses on timeout or dependency failure.
+- Missing citations or citation persistence failures are logged and downgraded safely.
+- Backend API key auth can be enabled with `RAG_API_KEYS`.
+- Per-client rate limiting is enabled from config and returns structured `429` responses with `retry-after`.
 
 Monitoring and security notes: [docs/security.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/security.md)
 
@@ -210,6 +234,13 @@ It runs:
 - frontend build
 - backend Docker build
 - frontend Docker build
+
+## Production-readiness
+
+- Deployable to Render with a checked-in blueprint, health checks, persistent data disk, and Dockerized API/web services.
+- Structured observability with request IDs, JSON logs, Prometheus metrics, and stage-level latency tracking.
+- Failure handling for validation errors, retrieval/generation timeouts, downstream dependency failures, and degraded citation behavior.
+- Practical API protection with env-configured API keys, locked-down CORS, and in-memory rate limiting that works in local/dev/demo deployments.
 
 ## Project structure
 

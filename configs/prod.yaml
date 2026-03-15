@@ -4,6 +4,10 @@ app:
 api:
   reload: false
   request_timeout_s: 60
+  retrieval_timeout_s: 12
+  generation_timeout_s: 25
+  cors:
+    allow_origins: ${API_CORS_ORIGINS}
 
 retrieval:
   hybrid:
@@ -14,3 +18,14 @@ retrieval:
     rrf_k: 30
   rerank:
     enabled: false
+
+auth:
+  enabled: true
+  provider: api_key
+  api_keys: ${RAG_API_KEYS}
+
+monitoring:
+  rate_limit:
+    enabled: true
+    requests_per_minute: 45
+    burst: 10

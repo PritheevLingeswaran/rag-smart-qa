@@ -11,6 +11,12 @@ os.environ["RAG_SKIP_STARTUP_VALIDATION"] = "1"
 
 
 class FakeDocumentService:
+    settings = type(
+        "Settings",
+        (),
+        {"api": type("API", (), {"max_upload_files": 10})()},
+    )()
+
     def create_upload_records(
         self,
         *,
@@ -308,3 +314,38 @@ def test_readiness_returns_structured_503_when_runtime_is_not_ready(monkeypatch:
     payload = readiness.json()
     assert payload["error"]["code"] == "runtime_not_ready"
     assert payload["error"]["message"] == "Missing chunks file"
+
+
+def test_upload_rejects_too_many_files() -> None:
+    app = create_app()
+    fake_document_service = FakeDocumentService()
+    fake_document_service.settings = type(
+        "Settings", (), {"api": type("API", (), {"max_upload_files": 1})()}
+    )()
+    app.dependency_overrides[deps.get_document_service] = lambda: fake_document_service
+    app.dependency_overrides[deps.get_current_user_id] = _fake_current_user_id
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/documents/upload",
+        files=[
+            ("files", ("guide-1.txt", io.BytesIO(b"hello"), "text/plain")),
+            ("files", ("guide-2.txt", io.BytesIO(b"world"), "text/plain")),
+        ],
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "too_many_files"
+
+
+def test_chat_route_rejects_whitespace_question() -> None:
+    app = create_app()
+    app.dependency_overrides[deps.get_chat_service] = _fake_chat_service
+    app.dependency_overrides[deps.get_current_user_id] = _fake_current_user_id
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/chat/query",
+        json={"question": "   ", "retrieval_mode": "hybrid_rrf", "top_k": 5},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"

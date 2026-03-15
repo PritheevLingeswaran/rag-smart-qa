@@ -31,6 +31,15 @@ def upload_documents(
     owner_id: str = Depends(get_current_user_id),
     document_service: DocumentService = Depends(get_document_service),  # noqa: B008
 ) -> UploadResponse:
+    max_files = int(document_service.settings.api.max_upload_files)
+    if len(files) > max_files:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "too_many_files",
+                "message": f"Upload supports at most {max_files} files per request.",
+            },
+        )
     documents = document_service.create_upload_records(
         files=files,
         owner_id=owner_id,

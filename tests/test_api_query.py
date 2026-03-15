@@ -1,11 +1,15 @@
 import os
+from collections.abc import Callable
+from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api import deps
 from api.app import create_app
 from retrieval.vector_store import IndexedChunk, SearchHit
 from schemas.response import Refusal, SourceChunk
+from utils.timeout import StageTimeoutError
 
 
 class DummyRetriever:
@@ -133,6 +137,60 @@ def test_validation_errors_use_structured_error_response() -> None:
     assert payload["error"]["code"] == "validation_error"
     assert payload["error"]["request_id"]
     assert payload["error"]["details"]["errors"]
+
+
+def test_validation_rejects_whitespace_only_query() -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.post("/api/v1/query", json={"query": "   ", "top_k": 2})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_query_endpoint_retrieval_timeout_returns_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = create_app()
+    app.dependency_overrides[deps.get_retriever] = _dummy_retriever
+    app.dependency_overrides[deps.get_answerer] = _dummy_answerer
+    monkeypatch.setattr(
+        "api.routes.legacy.run_with_timeout",
+        lambda stage, timeout_s, fn: (_ for _ in ()).throw(StageTimeoutError(stage, timeout_s)),
+    )
+
+    client = TestClient(app)
+    response = client.post("/api/v1/query", json={"query": "warranty?", "top_k": 3})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refusal"]["is_refusal"] is True
+    assert payload["metrics"]["error"] == "retrieval_timeout"
+
+
+def test_query_endpoint_generation_timeout_returns_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = create_app()
+    app.dependency_overrides[deps.get_retriever] = _dummy_retriever
+    app.dependency_overrides[deps.get_answerer] = _dummy_answerer
+
+    def _timeout_generation(
+        stage: str,
+        timeout_s: float,
+        fn: Callable[[], Any],
+    ) -> Any:
+        if stage == "generation":
+            raise StageTimeoutError(stage, timeout_s)
+        return fn()
+
+    monkeypatch.setattr("api.routes.legacy.run_with_timeout", _timeout_generation)
+
+    client = TestClient(app)
+    response = client.post("/api/v1/query", json={"query": "warranty?", "top_k": 3})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refusal"]["is_refusal"] is True
+    assert payload["metrics"]["error"] == "generation_timeout"
 
 
 os.environ["RAG_SKIP_STARTUP_VALIDATION"] = "1"

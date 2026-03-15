@@ -38,11 +38,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         contact={"name": "rag-smart-qa contributors"},
     )
+    app.state.settings = settings
     app.add_middleware(ObservabilityMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.api.cors.allow_origins,
-        allow_credentials=True,
+        allow_credentials="*" not in settings.api.cors.allow_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )

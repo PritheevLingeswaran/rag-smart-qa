@@ -113,10 +113,14 @@ api:
   host: 0.0.0.0
   port: 8000
   cors:
-    allow_origins: ["*"]
+    allow_origins: ["http://localhost:3000", "http://127.0.0.1:3000"]
   reload: true
   enable_debug_retrieval_endpoint: false
   request_timeout_s: 60
+  retrieval_timeout_s: 15
+  generation_timeout_s: 30
+  max_query_length: 4000
+  max_upload_files: 10
 
 storage:
   provider: local
@@ -131,12 +135,19 @@ auth:
   enabled: false
   provider: none
   header_user_id: x-user-id
+  api_key_header: x-api-key
+  api_keys: []
   demo_user_id: local-user
 
 monitoring:
   prometheus:
     enabled: true
     endpoint: /metrics
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst: 10
+    key_strategy: user_or_ip
 
 evaluation:
   dataset_path: evaluation/datasets/gold.jsonl

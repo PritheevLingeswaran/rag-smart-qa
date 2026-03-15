@@ -350,7 +350,9 @@ class Answerer:
         self._disable_remote_generation = not bool(oai.api_key)
 
     def generate(self, question: str, hits: list[SearchHit]) -> GenerationOutput:
+        log.info("generation.started", question_chars=len(question), hits=len(hits))
         if not hits:
+            log.info("generation.refused_no_hits")
             return GenerationOutput(
                 answer=(
                     "I cannot answer from the provided documents because no "
@@ -368,6 +370,7 @@ class Answerer:
 
         answerability, answerability_reason = _classify_answerability(self.settings, question, hits)
         if answerability == "not_answerable":
+            log.info("generation.not_answerable", reason=answerability_reason)
             sources = [
                 SourceChunk(
                     chunk_id=h.chunk.chunk_id,
@@ -429,6 +432,7 @@ class Answerer:
                 )
                 for h in hits
             ]
+            log.info("generation.fallback_local", refusal=is_refusal, reason=reason or "")
             return GenerationOutput(
                 answer=fallback_answer,
                 confidence=0.65 if not is_refusal else 0.0,
@@ -471,6 +475,7 @@ class Answerer:
                 )
                 for h in hits
             ]
+            log.info("generation.fallback_after_error", refusal=is_refusal, reason=reason or "")
             return GenerationOutput(
                 answer=fallback_answer,
                 confidence=0.65 if not is_refusal else 0.0,
@@ -511,6 +516,7 @@ class Answerer:
         ]
 
         if not isinstance(parsed, dict):
+            log.warning("generation.invalid_model_output")
             return GenerationOutput(
                 answer="I cannot answer because the model returned an invalid JSON response.",
                 confidence=0.0,
@@ -537,8 +543,12 @@ class Answerer:
         ):
             is_refusal = True
             reason = "Answer did not include valid citations from retrieved evidence."
+            log.warning(
+                "generation.citation_mismatch", cited_chunk_ids=cited, answer_preview=answer[:120]
+            )
 
         if is_refusal:
+            log.info("generation.refused", reason=reason or "Refused by policy.")
             return GenerationOutput(
                 answer=answer or "I cannot answer from the provided documents.",
                 confidence=0.0,
@@ -557,6 +567,11 @@ class Answerer:
         conf = _sigmoid(2.0 * max_s + mean_s - 1.0)
         conf = float(max(0.05, min(0.98, conf)))
 
+        log.info(
+            "generation.completed",
+            confidence=conf,
+            citation_coverage=_citation_coverage(answer, retrieved_ids),
+        )
         return GenerationOutput(
             answer=answer,
             confidence=conf,

@@ -6,6 +6,7 @@ src/api/app.py
 src/api/deps.py
 src/api/errors.py
 src/api/middleware.py
+src/api/rate_limit.py
 src/api/routes/__init__.py
 src/api/routes/chat.py
 src/api/routes/documents.py
@@ -66,11 +67,14 @@ src/utils/logging.py
 src/utils/openai_client.py
 src/utils/settings.py
 src/utils/text.py
+src/utils/timeout.py
 src/utils/token_counting.py
 tests/test_answerer_gating.py
 tests/test_api_query.py
+tests/test_api_security.py
 tests/test_api_webapp.py
 tests/test_bm25_persistence.py
+tests/test_chat_service_failures.py
 tests/test_chunking.py
 tests/test_config_loading.py
 tests/test_eval_and_fusion.py

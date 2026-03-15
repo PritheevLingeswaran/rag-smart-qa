@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: rag-smart-qa-api
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /readyz
+    envVars:
+      - key: RAG_ENV
+        value: prod
+      - key: RAG_SKIP_STARTUP_VALIDATION
+        value: "0"
+      - key: RAG_API_KEYS
+        sync: false
+      - key: API_CORS_ORIGINS
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: OPENAI_ORG
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_ENV
+        sync: false
+    disk:
+      name: rag-smart-qa-data
+      mountPath: /app/data
+      sizeGB: 1
+
+  - type: web
+    name: rag-smart-qa-web
+    env: docker
+    plan: starter
+    rootDir: web
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: rag-smart-qa-api
+          property: host

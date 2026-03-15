@@ -9,6 +9,7 @@ Production-style full-stack RAG system with strict grounding, hybrid retrieval, 
 - Container-ready backend and frontend with health checks, non-root runtime users, and Docker Compose wiring.
 - CI runs backend lint/type/test, frontend test/build, and Docker image builds from a clean checkout.
 - Structured logging, request IDs, correlation IDs, and Prometheus metrics for HTTP, retrieval, generation, errors, refusals, and token/cost usage.
+- API key auth, per-client rate limiting, timeout guards, and degraded fallback handling for reviewer-safe production demos.
 - Reproducible evaluation and load-test artifacts saved under `experiments/metrics/`.
 
 ## Architecture
@@ -129,8 +130,17 @@ docker compose up --build
 
 ### Cloud target
 
-The repo now documents a concrete Render deployment path for the API and web app:
+The repo now includes a concrete Render blueprint for the API and web app:
+[render.yaml](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/render.yaml)
+
+Render setup details:
 [docs/deployment.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/deployment.md)
+
+Deployment env vars:
+
+- `RAG_API_KEYS` for backend API-key protection
+- `API_CORS_ORIGINS` for allowed frontend origins
+- `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_ORG` when hosted model access is enabled
 
 ## Monitoring
 
@@ -141,12 +151,33 @@ The repo now documents a concrete Render deployment path for the API and web app
   - request count
   - HTTP latency
   - retrieval latency
+  - rerank latency
   - generation latency
   - retrieval score diagnostics
   - request errors
   - refusals
+  - fallback/degraded responses
+  - auth failures
+  - rate-limit rejections
   - token usage
   - cost usage when available
+
+Example structured log fields:
+
+- `request_id`
+- `correlation_id`
+- `path`
+- `elapsed_s`
+- retrieval stage top scores
+- fallback reason for degraded responses
+
+## Failure handling and API security
+
+- Whitespace-only or malformed queries are rejected with structured `422` responses.
+- Retrieval and generation have timeout guards and return safe refusal/degraded responses on timeout or dependency failure.
+- Missing citations or citation persistence failures are logged and downgraded safely.
+- Backend API key auth can be enabled with `RAG_API_KEYS`.
+- Per-client rate limiting is enabled from config and returns structured `429` responses with `retry-after`.
 
 Monitoring and security notes: [docs/security.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/security.md)
 
@@ -192,6 +223,13 @@ It runs:
 - frontend build
 - backend Docker build
 - frontend Docker build
+
+## Production-readiness
+
+- Deployable to Render with a checked-in blueprint, health checks, persistent data disk, and Dockerized API/web services.
+- Structured observability with request IDs, JSON logs, Prometheus metrics, and stage-level latency tracking.
+- Failure handling for validation errors, retrieval/generation timeouts, downstream dependency failures, and degraded citation behavior.
+- Practical API protection with env-configured API keys, locked-down CORS, and in-memory rate limiting that works in local/dev/demo deployments.
 
 ## Project structure
 
