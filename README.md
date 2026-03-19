@@ -1,42 +1,41 @@
 # rag-smart-qa
 
-Production-style RAG API with strict grounding, hybrid retrieval, typed FastAPI contracts, measurable evaluation, and Docker deployment.
+Production-style RAG system with a FastAPI backend and a Next.js frontend. The app supports document upload, grounded Q&A with citations, summaries, settings, and OAuth-based frontend auth.
 
-## Highlights
+## Stack
 
-- FastAPI application with versioned routes under `/api/v1` plus operational endpoints such as `/healthz`, `/readyz`, `/metrics`, and `/stats`.
-- Dense, BM25, weighted hybrid, RRF hybrid, and optional rerank retrieval paths.
-- Strict refusal behavior when evidence is weak or citations are invalid.
-- Structured logging, request IDs, correlation IDs, and Prometheus metrics.
-- Reproducible evaluation and load-test artifacts under `experiments/metrics/`.
+- Backend: FastAPI, Pydantic, Chroma/FAISS-ready retrieval, BM25, grounded answer generation
+- Frontend: Next.js 14, TypeScript, Auth.js, dark/light theme
+- Storage: local files, SQLite metadata, local index persistence
+- Ops: Prometheus metrics, structured logging, Docker support, evaluation scripts
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  C[Client] --> A[FastAPI API]
+  U[User] --> W[Next.js Web]
+  W --> P[Next.js backend proxy]
+  P --> A[FastAPI API]
   A --> M[(SQLite metadata)]
   A --> S[(Local uploads)]
   A --> R[Retriever]
   R --> B[BM25 index]
   R --> V[Vector store]
   A --> G[Answerer]
-  A --> P[Prometheus metrics]
-  I[Ingestion / Index build] --> S
-  I --> B
-  I --> V
-  E[Evaluation scripts] --> A
-  E --> X[experiments/metrics]
+  A --> X[Metrics / logs]
 ```
 
-More detail: [docs/architecture.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/architecture.md)
+## What’s in the repo
 
-## Testing
+- [`src/`](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/src) FastAPI app, services, retrieval, generation, schemas, utilities
+- [`web/`](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/web) Next.js frontend with marketing pages, auth, and app UI
+- [`tests/`](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/tests) backend tests
+- [`docs/`](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs) architecture, deployment, API, security, tradeoffs
+- [`experiments/metrics/`](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/experiments/metrics) saved evaluation artifacts
 
-- Backend tests: `pytest -q`
-- Coverage output: `coverage.xml`
+## Local setup
 
-### Reproduce local checks
+### Backend
 
 ```bash
 python3 -m venv .venv
@@ -44,62 +43,102 @@ source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
 pip install -e .
-ruff check src tests evaluation/resume_metrics.py
-mypy src tests evaluation/resume_metrics.py
-RAG_SKIP_STARTUP_VALIDATION=1 OPENAI_API_KEY=test OPENAI_BASE_URL=http://localhost:9999/v1 OPENAI_ORG='' pytest --cov=src --cov-report=term-missing --cov-report=xml --cov-fail-under=60 -q
+cp .env.example .env
 ```
 
-## Local development
+If you want the demo API key locally, make sure [`.env`](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/.env) contains:
+
+```env
+RAG_API_KEYS=changeme-reviewer-key
+```
+
+### Frontend
 
 ```bash
-python3 -m venv .venv
+cd web
+npm install
+cp .env.example .env.local
+```
+
+At minimum, set these in [`web/.env.local`](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/web/.env.local):
+
+```env
+AUTH_SECRET=
+AUTH_GITHUB_ID=
+AUTH_GITHUB_SECRET=
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+BACKEND_API_KEY=changeme-reviewer-key
+NEXTAUTH_URL=http://localhost:3000
+```
+
+## Running the project
+
+### Start the backend
+
+```bash
 source .venv/bin/activate
-make install
-cp .env.example .env
 make ingest
 make index
 make api
 ```
 
-API docs: `http://127.0.0.1:8000/docs`
+Backend URLs:
 
-## Docker and deployment
+- API: `http://127.0.0.1:8000`
+- Docs: `http://127.0.0.1:8000/docs`
 
-### Local Docker Compose
+### Start the frontend
 
 ```bash
-cp .env.example .env
-docker compose up --build
+cd web
+npm run dev
 ```
 
-API: `http://127.0.0.1:8000`
+Frontend URL:
 
-### Render
+- App: `http://localhost:3000`
 
-The checked-in blueprint deploys the API service:
-[render.yaml](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/render.yaml)
+## Backend auth note
 
-Deployment details:
-[docs/deployment.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/deployment.md)
+The FastAPI backend uses `x-api-key` when API-key auth is enabled. The Next.js app is wired so browser requests go through a server-side proxy route and the backend key stays on the server side.
 
-## Project structure
+## Main backend routes
 
-```text
-src/api/               FastAPI app, middleware, routes, structured errors
-src/services/          Upload, metadata, chat, summary, storage services
-src/retrieval/         BM25, dense retrieval, hybrid fusion, reranking
-src/generation/        Grounded answer generation and refusal logic
-tests/                 Backend unit, API, and integration tests
-docs/                  Architecture, API, tradeoffs, decisions, deployment, security
-experiments/metrics/   Saved evaluation and load-test artifacts
+- `POST /query`
+- `POST /api/v1/chat/query`
+- `GET /api/v1/chat/sessions`
+- `GET /api/v1/documents`
+- `POST /api/v1/documents/upload`
+- `GET /api/v1/documents/{id}`
+- `GET /api/v1/documents/{id}/summary`
+- `GET /api/v1/settings`
+
+## Checks
+
+Backend:
+
+```bash
+source .venv/bin/activate
+ruff check src tests evaluation/resume_metrics.py
+mypy src tests evaluation/resume_metrics.py
+pytest --cov=src --cov-report=term-missing --cov-report=xml -q
+```
+
+Frontend:
+
+```bash
+cd web
+npm run build
 ```
 
 ## Docs
 
 - API contract: [docs/api_contract.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/api_contract.md)
-- Security notes: [docs/security.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/security.md)
-- Decisions: [docs/decisions.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/decisions.md)
-- Tradeoffs: [docs/tradeoffs.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/tradeoffs.md)
+- Architecture: [docs/architecture.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/architecture.md)
+- Deployment: [docs/deployment.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/deployment.md)
+- Security: [docs/security.md](/Users/thamaraiselvang/Pritheev%20Projects/rag-smart-qa/docs/security.md)
 
 ## License
 
