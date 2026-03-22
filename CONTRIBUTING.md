@@ -14,7 +14,7 @@ cp .env.example .env
 CI runs three separate jobs:
 - `lint` on Python 3.11
 - `typecheck` on Python 3.11
-- `test` on Python 3.10 and 3.11 with `fail-fast: false`
+- `test` on Python 3.11
 
 Workflow behavior:
 - Pull requests run CI for every update.
