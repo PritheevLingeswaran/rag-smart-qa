@@ -32,9 +32,12 @@ src/preprocessing/__init__.py
 src/preprocessing/chunking.py
 src/preprocessing/cleaning.py
 src/preprocessing/pipeline.py
+src/rag_smart_qa/__init__.py
+src/rag_smart_qa/__main__.py
 src/rag_smart_qa.egg-info/PKG-INFO
 src/rag_smart_qa.egg-info/SOURCES.txt
 src/rag_smart_qa.egg-info/dependency_links.txt
+src/rag_smart_qa.egg-info/entry_points.txt
 src/rag_smart_qa.egg-info/top_level.txt
 src/retrieval/__init__.py
 src/retrieval/bm25.py

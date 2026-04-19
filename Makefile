@@ -1,4 +1,5 @@
 SHELL := /bin/bash
+PYTHON ?= python3
 
 QUALITY_PATHS := src tests evaluation/resume_metrics.py
 PYTHONPATH_EXPORT := PYTHONPATH=src
@@ -6,7 +7,7 @@ PYTHONPATH_EXPORT := PYTHONPATH=src
 .PHONY: install fmt lint typecheck test build run api dev ingest index eval load-test loadtest all docker-build docker-up docker-down stats eval-retrieval eval-grounding stability-60m
 
 install:
-	python -m pip install -U pip
+	$(PYTHON) -m pip install -U pip
 	pip install -r requirements.txt
 	pip install -e .
 
@@ -23,25 +24,25 @@ test:
 	$(PYTHONPATH_EXPORT) pytest --cov=src --cov-report=term-missing --cov-report=xml -q
 
 build:
-	python -m build
+	$(PYTHON) -m build
 
 run:
-	$(PYTHONPATH_EXPORT) python -m scripts.run_api
+	$(PYTHON) -m rag_smart_qa serve
 
 api:
-	$(PYTHONPATH_EXPORT) python -m scripts.run_api
+	$(PYTHON) -m rag_smart_qa serve
 
 dev:
 	docker compose up --build
 
 ingest:
-	$(PYTHONPATH_EXPORT) python -m scripts.ingest_data
+	$(PYTHON) -m rag_smart_qa ingest
 
 index:
-	$(PYTHONPATH_EXPORT) python -m scripts.build_index
+	$(PYTHON) -m rag_smart_qa build-index
 
 eval:
-	$(PYTHONPATH_EXPORT) python -m scripts.measure_resume_metrics
+	$(PYTHON) -m rag_smart_qa eval
 
 load-test:
 	$(PYTHONPATH_EXPORT) python -m scripts.load_test

@@ -1,0 +1,2 @@
+[console_scripts]
+rag-smart-qa = rag_smart_qa.__main__:main

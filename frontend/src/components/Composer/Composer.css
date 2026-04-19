@@ -1,38 +1,60 @@
 .composer-wrap {
-  padding: 12px 32px 20px;
+  padding: 16px 32px 32px;
   max-width: 860px;
   width: 100%;
   margin: 0 auto;
   flex-shrink: 0;
+  position: relative;
+  z-index: 20;
+}
+
+.composer-wrap::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(180deg, transparent, var(--surface-container-lowest) 80%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .composer-attachments {
   display: flex;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 24px; /* Increased vertical space constraint */
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
 }
 
 .attachment-card {
-  width: 228px;
-  min-width: 228px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.018);
-  padding: 10px 12px;
+  width: 260px;
+  min-width: 260px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--outline-variant); /* Ghost Border */
+  background: var(--surface-container-highest); /* Tonal Depth */
+  padding: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  animation: slideUpFade 300ms ease both;
+  transition: background var(--transition);
+}
+
+.attachment-card:hover {
+  /* 2% background shift on hover rule */
+  background: var(--surface-bright);
 }
 
 .attachment-icon-shell {
-  width: 50px;
-  height: 50px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -40,13 +62,14 @@
 }
 
 .attachment-badge {
-  padding: 7px 9px;
-  border-radius: 12px;
-  background: rgba(18, 18, 20, 0.78);
-  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .attachment-image {
@@ -58,77 +81,72 @@
 .attachment-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
 .attachment-name {
-  font-size: 13px;
-  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-surface);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .attachment-status {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  line-height: 1.35;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.attachment-status--ready {
-  color: var(--accent);
-}
-
-.attachment-status--processing {
-  color: var(--text-secondary);
-}
-
-.attachment-status--failed {
-  color: var(--red);
-}
+.attachment-status--ready { color: var(--secondary); }
+.attachment-status--failed { color: var(--error); }
 
 .composer {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 10px 10px 10px 16px;
-  transition: border-color 180ms ease;
+  gap: 12px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant); /* Ghost border */
+  border-radius: var(--radius-xl);
+  padding: 12px 12px 12px 20px;
+  transition: box-shadow var(--transition), border-color var(--transition);
 }
 
 .composer:focus-within {
-  border-color: var(--accent);
+  /* Focus State rule: 1px primary border with violet bloom */
+  border-color: var(--primary);
+  box-shadow: 0 0 16px rgba(208, 188, 255, 0.25);
 }
 
 .composer-upload {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  transition: border-color var(--transition), color var(--transition), background var(--transition);
+  color: var(--on-surface-variant);
+  transition: all var(--transition);
 }
 
 .composer-upload:hover:not(:disabled) {
-  color: var(--text-primary);
-  border-color: var(--accent);
-  background: var(--accent-dim);
+  /* Secondary Button spec */
+  background: var(--surface-container-highest);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+  transform: translateY(-1px);
 }
 
 .composer-upload:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -138,66 +156,53 @@
   border: none;
   outline: none;
   resize: none;
-  font-size: 14.5px;
+  font-size: 15px; /* body-md */
   line-height: 1.6;
-  color: var(--text-primary);
+  color: var(--on-surface);
   min-height: 24px;
-  max-height: 200px;
+  max-height: 240px;
   overflow-y: auto;
-  padding: 2px 0;
+  padding: 8px 0;
 }
 
 .composer-input::placeholder {
-  color: var(--text-muted);
-}
-
-.composer-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  color: var(--on-surface-variant);
+  opacity: 0.7;
 }
 
 .composer-send {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--border);
-  color: var(--text-muted);
-  transition: background var(--transition), color var(--transition);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  transition: all var(--transition);
   cursor: default;
 }
 
 .composer-send--active {
-  background: var(--accent);
-  color: var(--bg);
+  /* Primary Button Spec */
+  background: var(--gradient-primary);
+  color: var(--surface-container-lowest);
   cursor: pointer;
 }
 
 .composer-send--active:hover {
-  background: var(--accent-hover);
-}
-
-.composer-send:disabled {
-  cursor: default;
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(208, 188, 255, 0.4); /* Glow bloom */
 }
 
 .composer-hint {
-  font-size: 11.5px;
-  color: var(--text-muted);
+  font-size: 11px; /* label-sm */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+  opacity: 0.6;
   text-align: center;
-  margin-top: 8px;
-}
-
-@media (max-width: 600px) {
-  .composer-wrap {
-    padding: 10px 16px 16px;
-  }
-
-  .attachment-card {
-    width: 190px;
-    min-width: 190px;
-  }
+  margin-top: 16px;
 }

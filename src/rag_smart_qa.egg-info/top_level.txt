@@ -4,6 +4,7 @@ generation
 ingestion
 monitoring
 preprocessing
+rag_smart_qa
 retrieval
 schemas
 services
