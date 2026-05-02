@@ -4,12 +4,14 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 .env
 .venv/
 .ci-venv/
 venv/
 .DS_Store
+data/raw/
 data/processed/
 *.log
 *.sqlite3
@@ -21,5 +23,7 @@ web/.next/
 web/node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/.firebase/
 frontend/.env
 frontend/.env.local
+src/*.egg-info/

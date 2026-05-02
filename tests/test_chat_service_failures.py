@@ -9,6 +9,8 @@ from utils.timeout import StageTimeoutError
 class FakeMetadata:
     def __init__(self) -> None:
         self.messages: list[dict[str, Any]] = []
+        self.documents: list[dict[str, Any]] = []
+        self.summary: dict[str, Any] | None = None
 
     def get_session(self, session_id: str | None, owner_id: str) -> dict[str, Any] | None:
         return None
@@ -36,6 +38,12 @@ class FakeMetadata:
 
     def get_document_by_path(self, source: str) -> dict[str, Any] | None:
         return {"id": "doc-1", "owner_id": "local-user"}
+
+    def list_documents(self, owner_id: str, **kwargs: Any) -> list[dict[str, Any]]:
+        return self.documents
+
+    def get_summary(self, document_id: str) -> dict[str, Any] | None:
+        return self.summary
 
     def list_sessions(self, owner_id: str) -> list[dict[str, Any]]:
         return []
@@ -109,3 +117,62 @@ def test_chat_service_returns_degraded_response_on_retrieval_failure(monkeypatch
     assert payload["refusal"]["is_refusal"] is True
     assert payload["sources"] == []
     assert "temporarily unavailable" in payload["answer"].lower()
+
+
+def test_chat_service_answers_document_page_count_without_retrieval(monkeypatch: Any) -> None:
+    metadata = FakeMetadata()
+    metadata.documents = [
+        {
+            "id": "doc-1",
+            "filename": "UNIT V - DAA.pdf",
+            "pages": 28,
+            "indexing_status": "ready",
+        }
+    ]
+    retriever = FakeRetriever(DummySettings())
+    service = ChatService(DummySettings(), metadata, FakeDocumentService(retriever))
+
+    payload = service.query(
+        owner_id="local-user",
+        question="how many pages are there in this pdf",
+        session_id=None,
+        retrieval_mode="hybrid_rrf",
+        top_k=5,
+    )
+
+    assert payload["answer"] == "The PDF has 28 pages."
+    assert payload["confidence"] == 1.0
+    assert payload["sources"] == []
+
+
+def test_chat_service_explains_unit_from_document_summary(monkeypatch: Any) -> None:
+    metadata = FakeMetadata()
+    metadata.documents = [
+        {
+            "id": "doc-1",
+            "filename": "44884f12-bd93-429a-aac1-49bb744015c7-UNIT V - DAA.pdf",
+            "pages": 28,
+            "indexing_status": "ready",
+        }
+    ]
+    metadata.summary = {
+        "title": "UNIT V - DAA",
+        "summary": "This unit covers randomized algorithms, NP-completeness, and string matching.",
+        "important_points": ["P and NP classes", "Rabin-Karp pattern matching"],
+        "topics": ["randomized algorithms", "NP-completeness", "Rabin-Karp"],
+    }
+    retriever = FakeRetriever(DummySettings())
+    service = ChatService(DummySettings(), metadata, FakeDocumentService(retriever))
+
+    payload = service.query(
+        owner_id="local-user",
+        question="explain me this unit 5",
+        session_id=None,
+        retrieval_mode="hybrid_rrf",
+        top_k=5,
+    )
+
+    assert "Unit V" in payload["answer"]
+    assert "28 pages" in payload["answer"]
+    assert "NP-completeness" in payload["answer"]
+    assert payload["sources"] == []

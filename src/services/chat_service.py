@@ -10,8 +10,8 @@ from monitoring.query_metrics import (
     record_fallback,
     record_grounded,
     record_quality_signal,
-    record_retrieval_failure,
     record_refusal,
+    record_retrieval_failure,
     record_retrieval_scores,
     record_usage_metrics,
     record_verifier_score,
@@ -57,6 +57,14 @@ class ChatService:
                 confidence=1.0,
                 total_latency_s=time.perf_counter() - total_started,
             )
+        document_answer = self._document_level_response(
+            owner_id=owner_id,
+            question=question,
+            session_id=cast(str, session["id"]),
+            total_latency_s=time.perf_counter() - total_started,
+        )
+        if document_answer is not None:
+            return document_answer
 
         retriever = self.document_service.get_retriever_for_mode(retrieval_mode)
         retrieval_mode_override = "bm25" if retrieval_mode == "bm25" else None
@@ -350,6 +358,115 @@ class ChatService:
         normalized = re.sub(r"[^a-z]+", "", question.lower())
         return normalized in {"hi", "hii", "hello", "hey", "heyy", "hola"}
 
+    def _document_level_response(
+        self,
+        *,
+        owner_id: str,
+        question: str,
+        session_id: str,
+        total_latency_s: float,
+    ) -> dict[str, Any] | None:
+        q = question.lower()
+        if not re.search(
+            r"\b(how many pages|page count|number of pages|which unit|what unit|explain|summari[sz]e)\b",
+            q,
+        ):
+            return None
+
+        documents = [
+            doc
+            for doc in self.metadata.list_documents(owner_id)
+            if doc.get("indexing_status") == "ready"
+        ]
+        if not documents:
+            return None
+        document = documents[0]
+        summary = self.metadata.get_summary(document["id"])
+        filename = str(document.get("filename") or "")
+        title = (
+            str((summary or {}).get("title") or "").strip()
+            or filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").strip()
+        )
+        page_count = int(document.get("pages") or 0)
+
+        if re.search(r"\b(how many pages|page count|number of pages)\b", q):
+            if page_count <= 0:
+                return None
+            plural = "page" if page_count == 1 else "pages"
+            return self._local_response(
+                session_id=session_id,
+                answer=f"The PDF has {page_count} {plural}.",
+                confidence=1.0,
+                total_latency_s=total_latency_s,
+                metadata={"local": True, "document_level": True, "document_id": document["id"]},
+            )
+
+        unit = self._unit_from_title(title) or self._unit_from_title(filename)
+        if re.search(r"\b(which unit|what unit)\b", q):
+            answer = f"This PDF is {unit}." if unit else f"This PDF appears to be {title}."
+            return self._local_response(
+                session_id=session_id,
+                answer=answer,
+                confidence=0.95,
+                total_latency_s=total_latency_s,
+                metadata={"local": True, "document_level": True, "document_id": document["id"]},
+            )
+
+        if re.search(r"\b(explain|summari[sz]e)\b", q) and (
+            "unit" in q or "pdf" in q or "document" in q
+        ):
+            answer = self._build_document_explanation(
+                title=title,
+                unit=unit,
+                page_count=page_count,
+                summary=summary,
+            )
+            return self._local_response(
+                session_id=session_id,
+                answer=answer,
+                confidence=0.9,
+                total_latency_s=total_latency_s,
+                metadata={"local": True, "document_level": True, "document_id": document["id"]},
+            )
+        return None
+
+    @staticmethod
+    def _unit_from_title(text: str) -> str | None:
+        normalized = text.replace("_", " ").replace("-", " ")
+        match = re.search(r"\bunit\s*([ivxlcdm]+|\d+)\b", normalized, flags=re.IGNORECASE)
+        if not match:
+            return None
+        value = match.group(1).upper()
+        return f"Unit {value}"
+
+    @staticmethod
+    def _build_document_explanation(
+        *,
+        title: str,
+        unit: str | None,
+        page_count: int,
+        summary: dict[str, Any] | None,
+    ) -> str:
+        heading = unit or title
+        parts = [f"{heading} is the uploaded document."]
+        if page_count > 0:
+            parts.append(f"It has {page_count} pages.")
+        if summary:
+            summary_text = str(summary.get("summary") or "").strip()
+            if summary_text:
+                parts.append(summary_text)
+            points = [
+                str(point).strip()
+                for point in (summary.get("important_points") or summary.get("key_insights") or [])
+                if str(point).strip()
+            ][:4]
+            if points:
+                parts.append("Key points: " + "; ".join(points) + ".")
+            topics = [str(topic).strip() for topic in (summary.get("topics") or []) if str(topic).strip()]
+            if topics:
+                parts.append("Main topics: " + ", ".join(topics[:6]) + ".")
+        return " ".join(parts)
+
     def _local_response(
         self,
         *,
@@ -357,6 +474,7 @@ class ChatService:
         answer: str,
         confidence: float,
         total_latency_s: float,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.metadata.add_message(
             session_id,
@@ -365,7 +483,7 @@ class ChatService:
             confidence=confidence,
             refusal=False,
             latency_ms=round(total_latency_s * 1000.0, 2),
-            metadata={"local": True},
+            metadata=metadata or {"local": True},
         )
         return {
             "session_id": session_id,
