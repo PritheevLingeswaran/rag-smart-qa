@@ -17,6 +17,8 @@ embeddings:
     local_files_only: true
 
 retrieval:
+  query_rewrite:
+    model: gemini-2.5-flash
   min_score: 0.12
   refuse_if_top_score_below: 0.18
   refuse_if_top_gap_below: 0.0
@@ -34,6 +36,8 @@ retrieval:
     max_entries: 512
 
 generation:
+  model: gemini-2.5-flash
+  verifier_model: gemini-2.5-flash
   answerability:
     answerable_top_score: 0.22
     partial_top_score: 0.12
