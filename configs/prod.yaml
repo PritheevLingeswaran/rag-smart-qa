@@ -17,7 +17,9 @@ retrieval:
     bm25_k: 250
     rrf_k: 30
   rerank:
-    enabled: false
+    enabled: true
+    provider: bge_reranker
+    model_name: BAAI/bge-reranker-base
 
 auth:
   enabled: true

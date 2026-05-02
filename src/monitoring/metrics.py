@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 HTTP_REQUEST_LATENCY = Histogram(
     "rag_http_request_latency_seconds",
@@ -77,4 +77,19 @@ RATE_LIMIT_REJECTIONS = Counter(
     "rag_rate_limit_rejections_total",
     "Total requests rejected by in-memory rate limiting",
     ["path"],
+)
+RETRIEVAL_FAILURES = Counter(
+    "rag_retrieval_failures_total",
+    "Retrieval failure classifications for refusals",
+    ["reason"],
+)
+VERIFIER_SCORE = Histogram(
+    "rag_external_verifier_score",
+    "Independent answer verifier score",
+    buckets=(0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0),
+)
+QUALITY_DRIFT_FLAG = Gauge(
+    "rag_quality_drift_flag",
+    "1 when rolling retrieval or answer quality degrades below threshold",
+    ["signal"],
 )

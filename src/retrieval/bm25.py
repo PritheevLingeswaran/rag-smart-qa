@@ -19,7 +19,6 @@ _DEFAULT_STOPWORDS = {
     "as",
     "at",
     "be",
-    "by",
     "for",
     "from",
     "how",
@@ -79,6 +78,8 @@ class BM25TextNormalizer:
                 t = _simple_stem(t)
             if t:
                 out.append(t)
+                if re.match(r"^ra\d{8,}$", t):
+                    out.append("ra")
         return out
 
 
@@ -96,7 +97,12 @@ class BM25Index:
         self.bm25 = BM25Okapi(self.tokens)
 
     def query(self, q: str, top_k: int) -> list[BM25Hit]:
-        scores = self.bm25.get_scores(self._normalizer.tokenize(q))
+        q_tokens = self._normalizer.tokenize(q)
+        if not q_tokens:
+            return []
+        scores = self.bm25.get_scores(q_tokens)
+        if not any(float(score) > 0.0 for score in scores):
+            return []
         ranked = sorted(enumerate(scores), key=lambda x: float(x[1]), reverse=True)[:top_k]
         return [BM25Hit(idx=i, score=float(s)) for i, s in ranked]
 
@@ -213,7 +219,11 @@ class BM25PersistentIndex:
             return []
 
         q_tokens = self._normalizer.tokenize(q)
+        if not q_tokens:
+            return []
         scores = self._bm25.get_scores(q_tokens)
+        if not any(float(score) > 0.0 for score in scores):
+            return []
         ranked = sorted(enumerate(scores), key=lambda x: float(x[1]), reverse=True)
         hits: list[BM25DocHit] = []
         for idx, s in ranked:

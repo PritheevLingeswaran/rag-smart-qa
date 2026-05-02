@@ -23,12 +23,11 @@ retrieval:
   hybrid:
     enabled: true
     fusion_method: rrf
-    dense_weight: 0.6
     dense_k: 50
     bm25_k: 250
     rrf_k: 30
   rerank:
-    enabled: false
+    enabled: true
     provider: lexical
   cache:
     enabled: true

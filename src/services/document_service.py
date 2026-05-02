@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -16,6 +17,7 @@ from services.metadata_service import MetadataService
 from services.storage_service import StorageService
 from services.summary_service import SummaryService
 from utils.config import ensure_dirs
+from utils.hash import sha256_file
 from utils.logging import get_logger
 from utils.settings import Settings
 
@@ -152,8 +154,12 @@ class DocumentService:
         return self.get_document_detail(document_id, owner_id)
 
     def rebuild_indexes(self, *, owner_id: str) -> None:
-        documents = self.metadata.list_documents(owner_id)
-        log.info("documents.rebuild.started", owner_id=owner_id, document_count=len(documents))
+        documents = self.metadata.list_all_documents()
+        log.info(
+            "documents.rebuild.started",
+            owner_id=owner_id,
+            document_count=len(documents),
+        )
         existing_paths: list[Path] = []
         active_documents: list[dict[str, Any]] = []
         for document in documents:
@@ -163,20 +169,33 @@ class DocumentService:
                 existing_paths.append(path)
                 self.metadata.set_document_status(
                     document["id"],
-                    owner_id,
+                    document["owner_id"],
                     indexing_status="processing",
                     error_message=None,
                 )
             else:
                 self.metadata.set_document_status(
                     document["id"],
-                    owner_id,
+                    document["owner_id"],
                     indexing_status="failed",
                     summary_status="failed" if self.settings.summaries.enabled else "disabled",
                     error_message=f"Missing uploaded file at {path}",
                 )
 
         chunks = ingest_document_paths(self.settings, existing_paths)
+        document_by_path = {document["stored_path"]: document for document in active_documents}
+        for chunk in chunks:
+            document = document_by_path.get(chunk.source)
+            if document is None:
+                continue
+            chunk.metadata.update(
+                {
+                    "document_id": document["id"],
+                    "owner_id": document["owner_id"],
+                    "filename": document["filename"],
+                    "collection_name": document.get("collection_name"),
+                }
+            )
         log.info(
             "documents.rebuild.ingested",
             owner_id=owner_id,
@@ -207,7 +226,7 @@ class DocumentService:
                         summary_status = summary_payload["status"]
                     self.metadata.set_document_status(
                         document["id"],
-                        owner_id,
+                        document["owner_id"],
                         indexing_status="failed",
                         pages=page_count,
                         chunks_created=chunk_count,
@@ -221,7 +240,7 @@ class DocumentService:
                 if chunk_count == 0:
                     self.metadata.set_document_status(
                         document["id"],
-                        owner_id,
+                        document["owner_id"],
                         indexing_status="failed",
                         pages=page_count,
                         chunks_created=0,
@@ -236,7 +255,7 @@ class DocumentService:
                 if self.settings.summaries.enabled:
                     self.metadata.set_document_status(
                         document["id"],
-                        owner_id,
+                        document["owner_id"],
                         indexing_status="processing",
                         pages=page_count,
                         chunks_created=chunk_count,
@@ -250,7 +269,7 @@ class DocumentService:
                     summary_status = summary_payload["status"]
                 self.metadata.set_document_status(
                     document["id"],
-                    owner_id,
+                    document["owner_id"],
                     indexing_status="ready",
                     pages=page_count,
                     chunks_created=chunk_count,
@@ -267,7 +286,7 @@ class DocumentService:
             except Exception as exc:
                 self.metadata.set_document_status(
                     document["id"],
-                    owner_id,
+                    document["owner_id"],
                     indexing_status="failed",
                     summary_status="failed" if self.settings.summaries.enabled else "disabled",
                     error_message=str(exc),
@@ -294,15 +313,16 @@ class DocumentService:
     def get_retriever_for_mode(self, mode: str) -> Retriever:
         if mode in {"dense", "bm25"}:
             settings = self._make_dense_settings()
-        elif mode == "hybrid_weighted":
-            settings = self._make_hybrid_settings(fusion_method="weighted")
-        elif mode == "hybrid_rrf":
-            settings = self._make_hybrid_settings(fusion_method="rrf")
+        elif mode in {"hybrid_weighted", "hybrid_rrf"}:
+            settings = self._make_hybrid_settings()
         elif mode == "hybrid_rrf_rerank":
-            settings = self._make_hybrid_settings(fusion_method="rrf", rerank_enabled=True)
+            settings = self._make_hybrid_settings()
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported retrieval mode: {mode}")
         return Retriever(settings, build_vector_store(settings))
+
+    def source_filter_for_owner(self, owner_id: str) -> str:
+        return str(Path(self.settings.paths.uploads_dir) / owner_id)
 
     def _read_preview(self, stored_path: str) -> list[dict[str, Any]]:
         pages = _load_pages(Path(stored_path))
@@ -354,6 +374,19 @@ class DocumentService:
             embeddings = embedder.embed_texts([chunk.text for chunk in batch_chunks])
             store.add(batch_chunks, embeddings.vectors)
         store.save()
+        manifest = {
+            "embedding_provider": self.settings.embeddings.provider,
+            "embedding_model": self.settings.embeddings.model,
+            "sentence_transformers_model": self.settings.embeddings.sentence_transformers.model_name,
+            "vector_store_provider": self.settings.vector_store.provider,
+            "bm25_index_version": BM25PersistentIndex.INDEX_VERSION,
+            "corpus_hash": sha256_file(chunks_path),
+            "chunk_count": len(chunks),
+        }
+        (Path(self.settings.paths.indexes_dir) / "index_manifest.json").write_text(
+            json.dumps(manifest, indent=2),
+            encoding="utf-8",
+        )
         log.info(
             "documents.index_build.completed",
             chunk_count=len(chunks),
@@ -379,19 +412,14 @@ class DocumentService:
         settings = self.settings.model_copy(deep=True)
         settings.retrieval.query_rewrite.enabled = False
         settings.retrieval.hybrid.enabled = False
-        settings.retrieval.rerank.enabled = False
+        settings.retrieval.rerank.enabled = True
         settings.api.reload = False
         return settings
 
-    def _make_hybrid_settings(
-        self,
-        *,
-        fusion_method: str,
-        rerank_enabled: bool | None = None,
-    ) -> Settings:
+    def _make_hybrid_settings(self) -> Settings:
         settings = self._make_dense_settings()
+        settings.retrieval.query_rewrite.enabled = self.settings.retrieval.query_rewrite.enabled
         settings.retrieval.hybrid.enabled = True
-        settings.retrieval.hybrid.fusion_method = fusion_method
-        if rerank_enabled is not None:
-            settings.retrieval.rerank.enabled = rerank_enabled
+        settings.retrieval.hybrid.fusion_method = "rrf"
+        settings.retrieval.rerank.enabled = True
         return settings

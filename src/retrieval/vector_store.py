@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
@@ -24,7 +24,8 @@ class IndexedChunk:
 @dataclass(frozen=True)
 class SearchHit:
     chunk: IndexedChunk
-    score: float  # normalized similarity-like score in [0,1]
+    score: float  # backend-specific relevance score; do not assume a fixed range
+    explanation: dict[str, Any] = field(default_factory=dict)
 
 
 def _as_numpy_2d(vectors: Any) -> np.ndarray:
@@ -124,8 +125,12 @@ class ChromaVectorStore(VectorStore):
         self.settings = settings
         self.persist_dir = settings.vector_store.chroma.persist_dir
         self.collection_name = settings.vector_store.chroma.collection_name
-        self._client = chromadb.PersistentClient(path=self.persist_dir)
-        self._collection = self._client.get_or_create_collection(name=self.collection_name)
+        chroma_settings = chromadb.config.Settings(anonymized_telemetry=False)
+        self._client = chromadb.PersistentClient(path=self.persist_dir, settings=chroma_settings)
+        self._collection = self._client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
 
     def add(self, chunks: list[IndexedChunk], vectors: Any) -> None:
         if not chunks:
@@ -175,7 +180,11 @@ class ChromaVectorStore(VectorStore):
             if filter_source_substr and filter_source_substr not in source:
                 continue
 
-            score = 1.0 / (1.0 + float(dist))
+            space = str((getattr(self._collection, "metadata", None) or {}).get("hnsw:space", ""))
+            if space == "cosine":
+                score = max(0.0, min(1.0, 1.0 - float(dist)))
+            else:
+                score = 1.0 / (1.0 + float(dist))
 
             chunk = IndexedChunk(
                 chunk_id=str(cid),

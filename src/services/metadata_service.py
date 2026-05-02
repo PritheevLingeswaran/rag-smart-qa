@@ -201,6 +201,11 @@ class MetadataService:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_document(row) for row in rows]
 
+    def list_all_documents(self) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute("SELECT * FROM documents ORDER BY upload_time DESC").fetchall()
+        return [self._row_to_document(row) for row in rows]
+
     def count_documents(self, owner_id: str | None = None) -> int:
         query = "SELECT COUNT(*) FROM documents"
         params: tuple[Any, ...] = ()

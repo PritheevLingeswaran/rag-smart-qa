@@ -70,21 +70,19 @@ retrieval:
     enabled: true
     max_entries: 256
   hybrid:
-    enabled: false
-    fusion_method: weighted
+    enabled: true
+    fusion_method: rrf
     # Candidate set sizes for hybrid retrieval.
     # bm25_k is over the FULL corpus.
     bm25_k: 200
     dense_k: 40
-    # Tunable fusion weight: final = dense_weight*dense + (1-dense_weight)*bm25
-    dense_weight: 0.65
     rrf_k: 60
     min_dense_score: 0.0
     min_sparse_score: 0.0
   rerank:
-    enabled: false
+    enabled: true
     provider: lexical
-    model_name: cross-encoder/ms-marco-MiniLM-L-6-v2
+    model_name: BAAI/bge-reranker-base
     query_weight: 0.6
     retrieval_weight: 0.4
     min_query_term_coverage: 0.1
@@ -98,6 +96,7 @@ generation:
   temperature: 0.0
   max_output_tokens: 700
   strict_refusal: true
+  min_confidence_for_answer: 0.35
   answerability:
     answerable_top_score: 0.30
     partial_top_score: 0.18

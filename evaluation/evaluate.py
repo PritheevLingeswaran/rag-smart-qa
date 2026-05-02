@@ -17,6 +17,7 @@ from evaluation.retrieval_metrics import (
     improved_recall_case,
 )
 from retrieval.corpus import load_chunks_jsonl
+from utils.hash import sha256_file
 from utils.openai_client import OpenAIClient
 
 
@@ -59,10 +60,12 @@ def evaluate_main() -> None:
     dense_p_at_k: list[float] = []
     dense_r_at_k: list[float] = []
     dense_mrrs: list[float] = []
+    dense_hit_at_k: list[float] = []
 
     hybrid_p_at_k: list[float] = []
     hybrid_r_at_k: list[float] = []
     hybrid_mrrs: list[float] = []
+    hybrid_hit_at_k: list[float] = []
 
     improved_recall_ids: list[str] = []
     hurt_precision_ids: list[str] = []
@@ -82,11 +85,15 @@ def evaluate_main() -> None:
     # Corpus stats (chunk count / sources). This helps quantify scale.
     corpus_chunks = 0
     corpus_sources = 0
+    index_manifest: dict[str, object] = {}
     try:
         chunks_path = str(Path(settings.paths.chunks_dir) / "chunks.jsonl")
         chunks, _ = load_chunks_jsonl(chunks_path)
         corpus_chunks = len(chunks)
         corpus_sources = len({c.source for c in chunks})
+        manifest_path = Path(settings.paths.indexes_dir) / "index_manifest.json"
+        if manifest_path.exists():
+            index_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except Exception:
         # If the user runs eval before ingest, keep the report usable.
         corpus_chunks = 0
@@ -131,10 +138,12 @@ def evaluate_main() -> None:
             dense_p_at_k.append(cmp.dense.precision)
             dense_r_at_k.append(cmp.dense.recall)
             dense_mrrs.append(cmp.dense.mrr)
+            dense_hit_at_k.append(1.0 if set(dense_ids[:k]) & ex.relevant_chunk_ids else 0.0)
 
             hybrid_p_at_k.append(cmp.hybrid.precision)
             hybrid_r_at_k.append(cmp.hybrid.recall)
             hybrid_mrrs.append(cmp.hybrid.mrr)
+            hybrid_hit_at_k.append(1.0 if set(hybrid_ids[:k]) & ex.relevant_chunk_ids else 0.0)
 
             if improved_recall_case(cmp):
                 improved_recall_ids.append(ex.id)
@@ -165,7 +174,7 @@ def evaluate_main() -> None:
         ems.append(em)
         f1s.append(token_f1(g.answer, ex.answer))
         confs.append(g.confidence)
-        costs.append(float(r.embedding_cost_usd + g.llm_cost_usd))
+        costs.append(float(r.embedding_cost_usd + float(g.llm_cost_usd or 0.0)))
 
         src_texts = [h.chunk.text for h in r.hits]
         grounded = heuristic_grounded(g.answer, src_texts)
@@ -177,11 +186,13 @@ def evaluate_main() -> None:
 
     if dense_p_at_k and hybrid_p_at_k:
         dense_block = (
+            f"- dense retrieval@{k}: {sum(dense_hit_at_k) / len(dense_hit_at_k):.3f}\n"
             f"- dense precision@{k}: {sum(dense_p_at_k) / len(dense_p_at_k):.3f}\n"
             f"- dense recall@{k}: {sum(dense_r_at_k) / len(dense_r_at_k):.3f}\n"
             f"- dense MRR: {sum(dense_mrrs) / len(dense_mrrs):.3f}\n"
         )
         hybrid_block = (
+            f"- hybrid retrieval@{k}: {sum(hybrid_hit_at_k) / len(hybrid_hit_at_k):.3f}\n"
             f"- hybrid precision@{k}: {sum(hybrid_p_at_k) / len(hybrid_p_at_k):.3f}\n"
             f"- hybrid recall@{k}: {sum(hybrid_r_at_k) / len(hybrid_r_at_k):.3f}\n"
             f"- hybrid MRR: {sum(hybrid_mrrs) / len(hybrid_mrrs):.3f}\n"
@@ -203,7 +214,7 @@ def evaluate_main() -> None:
     avg_em = sum(ems) / max(1, len(ems))
     avg_f1 = sum(f1s) / max(1, len(f1s))
     hall_rate = sum(hallucinated) / max(1, len(hallucinated))
-    ece, _ = expected_calibration_error(confs, ems, n_bins=10)
+    ece, calibration_bins = expected_calibration_error(confs, ems, n_bins=10)
     cost_stats = summarize_cost(costs)
 
     ret_latency = summarize_latency(retrieval_lat_s)
@@ -228,6 +239,13 @@ def evaluate_main() -> None:
     out = (
         "# Evaluation Results\n\n"
         f"Dataset: `{settings.evaluation.dataset_path}`\n\n"
+        "## Reproducibility\n"
+        f"- dataset_version_sha256: `{sha256_file(settings.evaluation.dataset_path)}`\n"
+        f"- embedding_model: `{settings.embeddings.provider}:{settings.embeddings.model}`\n"
+        f"- generation_model: `{settings.generation.model}`\n"
+        f"- reranker: `{settings.retrieval.rerank.provider}:{settings.retrieval.rerank.model_name}`\n"
+        f"- index_version: `{index_manifest.get('bm25_index_version', 'unknown')}`\n"
+        f"- corpus_hash: `{index_manifest.get('corpus_hash', 'unknown')}`\n\n"
         "## Corpus Size\n"
         f"- chunks: {corpus_chunks}\n"
         f"- unique sources: {corpus_sources}\n\n"
@@ -236,8 +254,9 @@ def evaluate_main() -> None:
         "## Answer Quality\n"
         f"- exact match: {avg_em:.3f}\n"
         f"- token F1: {avg_f1:.3f}\n\n"
-        "## Hallucination\n"
-        f"- hallucination rate: {hall_rate:.3f}\n\n"
+        "## Faithfulness\n"
+        f"- unfaithful/hallucination rate: {hall_rate:.3f}\n"
+        f"- faithfulness: {1.0 - hall_rate:.3f}\n\n"
         "## Latency (local eval run)\n"
         f"- retrieval p95 (ms): {ret_latency.p95_ms:.2f}\n"
         f"- generation p95 (ms): {gen_latency.p95_ms:.2f}\n"
@@ -245,6 +264,14 @@ def evaluate_main() -> None:
         f"- end-to-end avg (ms): {e2e_latency.avg_ms:.2f}\n\n"
         "## Confidence Calibration\n"
         f"- ECE: {ece:.3f}\n\n"
+        + "".join(
+            (
+                f"- confidence [{b.lo:.1f}, {b.hi:.1f}): "
+                f"n={b.count}, avg_conf={b.avg_conf:.3f}, accuracy={b.accuracy:.3f}\n"
+            )
+            for b in calibration_bins
+        )
+        + "\n"
         "## Cost\n"
         f"- avg cost/query (USD): {cost_stats.avg_cost_usd:.6f}\n"
         f"- p95 cost/query (USD): {cost_stats.p95_cost_usd:.6f}\n"

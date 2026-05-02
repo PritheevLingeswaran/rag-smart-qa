@@ -28,6 +28,11 @@ class SourceCitation(BaseModel):
     page: int
     excerpt: str
     score: float
+    dense_score: float | None = None
+    bm25_score: float | None = None
+    rerank_score: float | None = None
+    final_rank_reason: str | None = None
+    retrieval_explanation: dict[str, Any] = Field(default_factory=dict)
     created_at: str
 
 

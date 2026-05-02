@@ -93,7 +93,7 @@ class CrossEncoderReranker(BaseReranker):
 @lru_cache(maxsize=4)
 def build_reranker(cfg_key: tuple[object, ...]) -> BaseReranker:
     provider = str(cfg_key[0])
-    if provider == "cross_encoder":
+    if provider in {"cross_encoder", "bge_reranker"}:
         return CrossEncoderReranker(model_name=str(cfg_key[1]))
     query_weight = cast(float, cfg_key[2])
     retrieval_weight = cast(float, cfg_key[3])

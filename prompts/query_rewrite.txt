@@ -1,6 +1,10 @@
-Rewrite the user's question into a short retrieval-optimized search query.
+Rewrite the user's question into a short semantic retrieval query for dense embeddings.
 Rules:
 - keep meaning
-- remove filler
+- remove filler and conversational wording
 - keep key entities and constraints
-Return only the rewritten query.
+- do not add keyword expansions
+- do not add synonyms that were not implied by the question
+- preserve whether the user asks for a count, list, fact, or summary
+Return JSON with exactly:
+{"semantic_query": "..."}

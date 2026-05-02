@@ -83,6 +83,24 @@ class _StubClientNoCitations:
         )
 
 
+class _StubClientVerifierMismatch:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def chat(self, **_: object) -> tuple[str, _Usage]:
+        self.calls += 1
+        if self.calls == 1:
+            return (
+                '{"answer":"Supported text [x:p1:c0].","cited_chunk_ids":["x:p1:c0"],'
+                '"refusal":{"is_refusal":false,"reason":""}}',
+                _Usage(),
+            )
+        return (
+            '{"verdict":"mismatch","score":0.05,"reason":"Verifier detected unsupported claim."}',
+            _Usage(),
+        )
+
+
 def test_uncited_llm_answer_is_refused_under_strict_policy() -> None:
     settings = Settings()
     settings.retrieval.refuse_if_top_score_below = 0.0
@@ -93,6 +111,81 @@ def test_uncited_llm_answer_is_refused_under_strict_policy() -> None:
     out = answerer.generate("What is the answer?", [_hit("x:p1:c0", 0.9, "Supported text")])
     assert out.refusal.is_refusal is True
     assert "citations" in out.refusal.reason.lower()
+
+
+def test_external_verifier_mismatch_penalizes_confidence_to_refusal() -> None:
+    settings = Settings()
+    settings.retrieval.refuse_if_top_score_below = 0.0
+    settings.retrieval.refuse_if_top_gap_below = 0.0
+    settings.generation.min_confidence_for_answer = 0.35
+    answerer = Answerer(settings)
+    answerer.client = _StubClientVerifierMismatch()
+    answerer._disable_remote_generation = False
+    out = answerer.generate("What is supported?", [_hit("x:p1:c0", 0.9, "Supported text")])
+    assert out.refusal.is_refusal is True
+    assert out.external_verification is not None
+    assert out.external_verification.mismatch_detected is True
+    assert out.confidence == 0.0
+
+
+def test_no_hits_exposes_retrieval_failure_classification() -> None:
+    settings = Settings()
+    answerer = Answerer(settings)
+    answerer._disable_remote_generation = True
+    out = answerer.generate("What is missing?", [])
+    assert out.refusal.is_refusal is True
+    assert out.retrieval_failure_reason == "no_retrieval"
+    assert out.debug is not None
+    assert out.debug["final_selection_reasoning"] == "No candidates retrieved."
+
+
+
+def test_fallback_extracts_presenter_name_count_from_title_slide() -> None:
+    settings = Settings()
+    settings.retrieval.refuse_if_top_score_below = 0.0
+    settings.retrieval.refuse_if_top_gap_below = 0.0
+    answerer = Answerer(settings)
+    answerer._disable_remote_generation = True
+    out = answerer.generate(
+        "how many names are there?",
+        [
+            _hit(
+                "deepfakes_presentation.pdf:p1:c0",
+                0.9,
+                "THE DEATH OF TRUST\n"
+                "By Mathew Anu Joy (RA2411026010225) "
+                "Pritheev Lingeswaran (RA2411026010228) "
+                "Thamaraiselvan (RA2411026010247)",
+            )
+        ],
+    )
+    assert out.refusal.is_refusal is False
+    assert "there are 3 names" in out.answer.lower()
+    assert "Mathew Anu Joy" in out.answer
+    assert "[deepfakes_presentation.pdf:p1:c0]" in out.answer
+
+
+def test_uncited_llm_answer_recovers_with_grounded_name_count_fallback() -> None:
+    settings = Settings()
+    settings.retrieval.refuse_if_top_score_below = 0.0
+    settings.retrieval.refuse_if_top_gap_below = 0.0
+    answerer = Answerer(settings)
+    answerer.client = _StubClientNoCitations()
+    answerer._disable_remote_generation = False
+    out = answerer.generate(
+        "how many names are there?",
+        [
+            _hit(
+                "deepfakes_presentation.pdf:p1:c0",
+                0.9,
+                "By Mathew Anu Joy (RA2411026010225) "
+                "Pritheev Lingeswaran (RA2411026010228) "
+                "Thamaraiselvan (RA2411026010247)",
+            )
+        ],
+    )
+    assert out.refusal.is_refusal is False
+    assert "there are 3 names" in out.answer.lower()
 
 
 def test_bm25_normalizer_collapses_pdf_spaced_words() -> None:
@@ -161,3 +254,88 @@ def test_remote_generation_is_allowed_in_dev_with_real_api_key() -> None:
     settings.embeddings.openai.api_key = "sk-real-key"
     settings.embeddings.openai.base_url = None
     assert _should_disable_remote_generation(settings) is False
+
+
+def test_hard_negative_supervisor_query_refuses_without_evidence() -> None:
+    settings = Settings()
+    settings.retrieval.refuse_if_top_score_below = 0.0
+    settings.retrieval.refuse_if_top_gap_below = 0.0
+    answerer = Answerer(settings)
+    answerer._disable_remote_generation = True
+    out = answerer.generate(
+        "Who supervised this project?",
+        [
+            _hit(
+                "project:p1:c0",
+                0.9,
+                "The project title is Production-Grade Hybrid RAG System. "
+                "The authors are Pritheev and Thamaraiselvan.",
+            )
+        ],
+    )
+    assert out.refusal.is_refusal is True
+    assert out.answer == "I don't know based on the provided documents"
+
+
+def test_multi_hop_title_and_authors_answer_uses_same_evidence() -> None:
+    settings = Settings()
+    settings.retrieval.refuse_if_top_score_below = 0.0
+    settings.retrieval.refuse_if_top_gap_below = 0.0
+    answerer = Answerer(settings)
+    answerer._disable_remote_generation = True
+    out = answerer.generate(
+        "What is the title and who are the authors?",
+        [
+            _hit(
+                "deepfakes:p1:c0",
+                0.9,
+                "THE DEATH OF TRUST\n"
+                "By Mathew Anu Joy (RA2411026010225) "
+                "Pritheev Lingeswaran (RA2411026010228)",
+            )
+        ],
+    )
+    assert out.refusal.is_refusal is False
+    assert "The Death Of Trust" in out.answer
+    assert "Mathew Anu Joy" in out.answer
+    assert "[deepfakes:p1:c0]" in out.answer
+
+
+def test_conflicting_supervisor_evidence_fails_safely() -> None:
+    settings = Settings()
+    settings.retrieval.refuse_if_top_score_below = 0.0
+    settings.retrieval.refuse_if_top_gap_below = 0.0
+    answerer = Answerer(settings)
+    answerer._disable_remote_generation = True
+    out = answerer.generate(
+        "Who was the supervisor?",
+        [
+            _hit("project:p1:c0", 0.9, "Supervisor: Alice Kumar"),
+            _hit("project:p2:c0", 0.88, "Supervisor: Bob Raman"),
+        ],
+    )
+    assert out.refusal.is_refusal is True
+    assert out.answer == "I don't know based on the provided documents"
+    assert "conflicting evidence" in out.refusal.reason.lower()
+
+
+def test_confidence_threshold_blocks_uncertain_answer() -> None:
+    settings = Settings()
+    settings.retrieval.refuse_if_top_score_below = 0.0
+    settings.retrieval.refuse_if_top_gap_below = 0.0
+    settings.generation.min_confidence_for_answer = 0.95
+    answerer = Answerer(settings)
+    answerer._disable_remote_generation = True
+    out = answerer.generate(
+        "What is the title and who are the authors?",
+        [
+            _hit(
+                "deepfakes:p1:c0",
+                0.55,
+                "THE DEATH OF TRUST\nBy Mathew Anu Joy (RA2411026010225)",
+            )
+        ],
+    )
+    assert out.refusal.is_refusal is True
+    assert out.answer == "I don't know based on the provided documents"
+    assert "confidence" in out.refusal.reason.lower()

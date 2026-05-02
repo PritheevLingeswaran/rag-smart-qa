@@ -15,9 +15,12 @@ from monitoring.query_metrics import (
     record_error,
     record_fallback,
     record_grounded,
+    record_quality_signal,
+    record_retrieval_failure,
     record_refusal,
     record_retrieval_scores,
     record_usage_metrics,
+    record_verifier_score,
 )
 from schemas.query import QueryRequest
 from schemas.response import QueryResponse, Refusal, SourceChunk
@@ -36,6 +39,11 @@ def _to_source_chunks(hits: list[Any]) -> list[SourceChunk]:
             page=hit.chunk.page,
             score=float(hit.score),
             text=hit.chunk.text,
+            dense_score=(hit.explanation or {}).get("dense_score"),
+            bm25_score=(hit.explanation or {}).get("bm25_score"),
+            rerank_score=(hit.explanation or {}).get("rerank_score"),
+            final_rank_reason=(hit.explanation or {}).get("final_rank_reason"),
+            retrieval_explanation=hit.explanation or {},
         )
         for hit in hits
     ]
@@ -51,6 +59,11 @@ def _serialize_retrieval_hits(
             "page": hit.chunk.page,
             "score": float(hit.score),
             "snippet": hit.chunk.text[:max_snippet_chars],
+            "dense_score": (hit.explanation or {}).get("dense_score"),
+            "bm25_score": (hit.explanation or {}).get("bm25_score"),
+            "rerank_score": (hit.explanation or {}).get("rerank_score"),
+            "final_rank_reason": (hit.explanation or {}).get("final_rank_reason"),
+            "retrieval_explanation": hit.explanation or {},
         }
         for hit in hits
     ]
@@ -238,6 +251,23 @@ def query(
         rerank_latency_s=(rerank_latency_ms / 1000.0) if rerank_latency_ms is not None else None,
     )
     record_retrieval_scores(generation.sources)
+    record_retrieval_failure(getattr(generation, "retrieval_failure_reason", None))
+    verifier = getattr(generation, "external_verification", None)
+    verifier_score = verifier.score if verifier is not None else None
+    record_verifier_score(verifier_score)
+    retrieval_at_k = 0.0 if not retrieval.hits else min(
+        1.0,
+        max(float(hit.score) for hit in retrieval.hits)
+        if max(float(hit.score) for hit in retrieval.hits) <= 1.0
+        else max(float(hit.score) for hit in retrieval.hits)
+        / (max(float(hit.score) for hit in retrieval.hits) + 1.0),
+    )
+    drift_status = record_quality_signal(
+        retrieval_at_k=retrieval_at_k,
+        answer_accuracy=verifier_score
+        if verifier_score is not None
+        else (0.0 if generation.refusal.is_refusal else generation.confidence),
+    )
     if generation.refusal.is_refusal:
         record_refusal(generation.refusal.reason)
     record_grounded(generation.answer, generation.sources, generation.refusal.is_refusal)
@@ -260,6 +290,18 @@ def query(
             "generation_latency_ms": round(generation_latency_s * 1000.0, 2),
             "answerability": generation.answerability,
             "citation_coverage": generation.citation_coverage,
+            "retrieval_failure_reason": getattr(generation, "retrieval_failure_reason", None),
+            "external_verification": verifier.__dict__ if verifier is not None else None,
+            "confidence_report": (
+                generation.confidence_report.__dict__
+                if getattr(generation, "confidence_report", None) is not None
+                else None
+            ),
+            "drift_status": drift_status,
+            "debug": {
+                "retrieval": retrieval_debug,
+                "generation": getattr(generation, "debug", None),
+            },
             "cost_measured": generation.llm_cost_usd is not None,
         },
     )

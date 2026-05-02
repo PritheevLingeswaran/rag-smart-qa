@@ -108,24 +108,28 @@ class QueryRewriteConfig(BaseModel):
     model: str = "gpt-4o-mini"
 
 
+class MultiHopPlanningConfig(BaseModel):
+    enabled: bool = True
+    model: str = "gpt-4o-mini"
+    max_hops: int = 3
+
+
 class HybridConfig(BaseModel):
-    enabled: bool = False
-    fusion_method: Literal["weighted", "rrf"] = "weighted"
+    enabled: bool = True
+    fusion_method: Literal["rrf"] = "rrf"
     # Number of BM25 candidates to retrieve from the *full corpus*.
     bm25_k: int = 200
     # Number of dense candidates to retrieve (typically >= top_k).
     dense_k: int = 40
-    # Fusion weight: final_score = dense_weight * dense + (1-dense_weight) * bm25
-    dense_weight: float = 0.65
     rrf_k: int = 60
     min_dense_score: float = 0.0
     min_sparse_score: float = 0.0
 
 
 class RerankConfig(BaseModel):
-    enabled: bool = False
-    provider: Literal["lexical", "cross_encoder"] = "lexical"
-    model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    enabled: bool = True
+    provider: Literal["lexical", "cross_encoder", "bge_reranker"] = "lexical"
+    model_name: str = "BAAI/bge-reranker-base"
     query_weight: float = 0.6
     retrieval_weight: float = 0.4
     min_query_term_coverage: float = 0.1
@@ -141,6 +145,7 @@ class AnswerabilityConfig(BaseModel):
 
 class RetrievalConfig(BaseModel):
     query_rewrite: QueryRewriteConfig = Field(default_factory=QueryRewriteConfig)
+    multi_hop_planning: MultiHopPlanningConfig = Field(default_factory=MultiHopPlanningConfig)
     bm25: BM25Config = Field(default_factory=BM25Config)
     cache: RetrievalCacheConfig = Field(default_factory=RetrievalCacheConfig)
     hybrid: HybridConfig = Field(default_factory=HybridConfig)
@@ -159,9 +164,12 @@ class GenerationPricingConfig(BaseModel):
 
 class GenerationConfig(BaseModel):
     model: str = "gpt-4o-mini"
+    verifier_model: str | None = None
+    external_verification_enabled: bool = True
     temperature: float = 0.0
     max_output_tokens: int = 700
     strict_refusal: bool = True
+    min_confidence_for_answer: float = 0.35
     answerability: AnswerabilityConfig = Field(default_factory=AnswerabilityConfig)
     pricing: GenerationPricingConfig = Field(default_factory=GenerationPricingConfig)
 

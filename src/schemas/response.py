@@ -9,8 +9,13 @@ class SourceChunk(BaseModel):
     chunk_id: str
     source: str
     page: int
-    score: float = Field(ge=-1.0, le=1.0)
+    score: float
     text: str
+    dense_score: float | None = None
+    bm25_score: float | None = None
+    rerank_score: float | None = None
+    final_rank_reason: str | None = None
+    retrieval_explanation: dict[str, Any] = Field(default_factory=dict)
 
 
 class Refusal(BaseModel):

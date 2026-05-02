@@ -31,10 +31,9 @@ def test_apply_min_score_cutoff_falls_back_to_unfiltered_when_all_removed() -> N
     assert [h.chunk.chunk_id for h in out] == ["c1", "c2"]
 
 
-def test_fusion_ranking_deterministic_order() -> None:
+def test_fusion_uses_rrf_only_and_unions_candidates() -> None:
     settings = Settings()
-    settings.retrieval.hybrid.dense_weight = 0.6
-    settings.retrieval.hybrid.fusion_method = "weighted"
+    settings.retrieval.hybrid.rrf_k = 10
     retriever = Retriever.__new__(Retriever)
     retriever.settings = settings
 
@@ -54,12 +53,9 @@ def test_fusion_ranking_deterministic_order() -> None:
         chunk_by_id=chunk_by_id,
         top_k=3,
     )
-    # Expected fused scores:
-    # a = 0.6*0.9 + 0.4*0   = 0.54
-    # b = 0.6*0.2 + 0.4*1.0 = 0.52
-    # c = 0.6*0.0 + 0.4*0.5 = 0.20
-    assert [h.chunk.chunk_id for h in fused] == ["a", "b", "c"]
-    assert debug["fusion_method"] == "weighted"
+    assert [h.chunk.chunk_id for h in fused] == ["b", "a", "c"]
+    assert debug["fusion_method"] == "rrf"
+    assert debug["candidate_count"] == 3
 
 
 def test_rrf_fusion_can_promote_sparse_hit_without_dense_score() -> None:
@@ -88,3 +84,40 @@ def test_rrf_fusion_can_promote_sparse_hit_without_dense_score() -> None:
 
     assert debug["fusion_method"] == "rrf"
     assert "c" in [h.chunk.chunk_id for h in fused]
+    sparse_only = next(h for h in fused if h.chunk.chunk_id == "c")
+    assert sparse_only.explanation["dense_score"] is None
+    assert sparse_only.explanation["bm25_score"] == 8.0
+    assert "reciprocal rank fusion" in sparse_only.explanation["final_rank_reason"]
+
+
+def test_adaptive_count_compression_preserves_entities_and_explains_selection() -> None:
+    settings = Settings()
+    retriever = Retriever.__new__(Retriever)
+    retriever.settings = settings
+    hit = SearchHit(
+        chunk=IndexedChunk(
+            chunk_id="resume:p1:c0",
+            source="resume.txt",
+            page=1,
+            text=(
+                "Projects\n"
+                "Production-Grade Hybrid RAG System (rag-smart-qa)\n"
+                "Production-Grade Real-Time ML Drift Detection System (realtime-ml-drift)\n"
+                "Production-Grade ML Decision Platform (ml-decision-platform)\n"
+            ),
+            metadata={},
+        ),
+        score=0.8,
+        explanation={"dense_score": 0.8},
+    )
+
+    compressed = retriever._compress_candidates(
+        query="How many projects are there?",
+        intent="count",
+        hits=[hit],
+    )
+
+    assert "rag-smart-qa" in compressed[0].chunk.text
+    assert "realtime-ml-drift" in compressed[0].chunk.text
+    assert compressed[0].explanation["matched_keywords"]
+    assert "selected because" in compressed[0].explanation["selection_reason"]

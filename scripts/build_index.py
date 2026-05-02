@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from embeddings.factory import build_embeddings_backend
@@ -7,6 +8,7 @@ from retrieval.bm25 import BM25PersistentIndex
 from retrieval.corpus import load_chunks_jsonl
 from retrieval.vector_store import VectorStore, build_vector_store
 from utils.config import ensure_dirs, load_settings
+from utils.hash import sha256_file
 from utils.logging import configure_logging, get_logger
 
 log = get_logger(__name__)
@@ -36,6 +38,7 @@ def build_index_main() -> None:
 
     embedder = build_embeddings_backend(settings)
     store: VectorStore = build_vector_store(settings)
+    store.reset()
 
     batch = int(settings.embeddings.batch_size)
     total_cost = 0.0
@@ -53,6 +56,19 @@ def build_index_main() -> None:
         )
 
     store.save()
+    manifest = {
+        "embedding_provider": settings.embeddings.provider,
+        "embedding_model": settings.embeddings.model,
+        "sentence_transformers_model": settings.embeddings.sentence_transformers.model_name,
+        "vector_store_provider": settings.vector_store.provider,
+        "bm25_index_version": BM25PersistentIndex.INDEX_VERSION,
+        "corpus_hash": sha256_file(chunks_path),
+        "chunk_count": len(chunks),
+    }
+    (Path(settings.paths.indexes_dir) / "index_manifest.json").write_text(
+        json.dumps(manifest, indent=2),
+        encoding="utf-8",
+    )
     log.info(
         "index.saved",
         provider=settings.vector_store.provider,

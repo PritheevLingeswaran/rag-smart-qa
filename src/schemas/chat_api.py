@@ -39,6 +39,11 @@ class ChatResponseSource(BaseModel):
     page: int
     score: float
     text: str
+    dense_score: float | None = None
+    bm25_score: float | None = None
+    rerank_score: float | None = None
+    final_rank_reason: str | None = None
+    retrieval_explanation: dict[str, object] = Field(default_factory=dict)
 
 
 class ChatTiming(BaseModel):
@@ -61,6 +66,7 @@ class ChatQueryResponse(BaseModel):
     citations: list[SourceCitation]
     sources: list[ChatResponseSource]
     timing: ChatTiming = Field(default_factory=ChatTiming)
+    debug: dict[str, object] = Field(default_factory=dict)
 
 
 class ChatMessage(BaseModel):

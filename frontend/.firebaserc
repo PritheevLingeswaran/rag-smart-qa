@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "smartrag-bbf17"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }
